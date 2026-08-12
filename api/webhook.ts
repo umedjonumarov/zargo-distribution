@@ -162,8 +162,9 @@ async function handleMenuAction(chatId: number, callbackId: string, action: stri
 // ---------------------------------------------------------
 // Vercel handler — Telegram webhook shu manzilga POST qiladi
 // ---------------------------------------------------------
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
+//export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
+if (req.method !== "POST") {
     res.status(200).send("ZarGo bot webhook ishlayapti");
     return;
   }
