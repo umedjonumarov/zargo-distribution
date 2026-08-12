@@ -52,11 +52,19 @@ export async function sendPhoto(
   return res.json();
 }
 
-export async function answerCallbackQuery(callbackQueryId: string, text?: string) {
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  text?: string,
+  showAlert?: boolean
+) {
   await fetch(`${TG_API}/answerCallbackQuery`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+      text,
+      show_alert: showAlert ?? false,
+    }),
   });
 }
 
