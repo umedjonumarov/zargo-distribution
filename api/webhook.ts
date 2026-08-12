@@ -1,7 +1,6 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { supabase, Shop } from "../lib/supabase";
-import { sendMessage, answerCallbackQuery, InlineButton } from "../lib/telegram";
-import { t, langLabel, Lang } from "../lib/i18n";
+ import { supabase, Shop } from "../lib/supabase.js";
+ import { sendMessage, answerCallbackQuery, InlineButton } from "../lib/telegram.js";
+ import { t, langLabel, Lang } from "../lib/i18n.js";
 
 // ---------------------------------------------------------
 // Asosiy menyu tugmalarini chiqarish
