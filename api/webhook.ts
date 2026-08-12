@@ -237,7 +237,7 @@ async function handleShowCategories(chatId: number, shop: Shop, lang: Lang) {
   await sendMessage(chatId, t.chooseCategory[lang], buttons);
 }
 
-const QTY_STEP = 5;
+const QTY_STEP = 1;
 
 // ---------------------------------------------------------
 // Kategoriya tanlanganda — shu kategoriyadagi tovarlarni ko'rsatish
@@ -297,9 +297,9 @@ async function handleShowProducts(
 
 function qtyStepperRow(productId: string, qty: number): InlineButton[] {
   return [
-    { text: "➖", callback_data: `dec_${productId}` },
+    { text: "🔴 −", callback_data: `dec_${productId}` },
     { text: `${qty} дона`, callback_data: "noop" },
-    { text: "➕", callback_data: `inc_${productId}` },
+    { text: "🟡 +", callback_data: `inc_${productId}` },
   ];
 }
 
@@ -313,29 +313,38 @@ async function handleQtyChange(
   direction: "inc" | "dec",
   productId: string
 ) {
-  // Shop va Product'ni PARALLEL so'raymiz (ketma-ket emas) — tezlik uchun
-  const [{ data: shop }, { data: product }] = await Promise.all([
-    supabase.from("shops").select("*").eq("telegram_chat_id", chatId).maybeSingle(),
+  // Do'kon + savat + tovar — 3 talab bitta PARALLEL bosqichda:
+  // shops so'rovi ichiga carts'ni ("embedded select") qo'shib, alohida so'rovni yo'q qilamiz
+  const [{ data: shopWithCart }, { data: product }] = await Promise.all([
+    supabase
+      .from("shops")
+      .select("*, carts(items)")
+      .eq("telegram_chat_id", chatId)
+      .maybeSingle(),
     supabase.from("products").select("*").eq("id", productId).maybeSingle(),
   ]);
 
-  if (!shop || !product) {
+  if (!shopWithCart || !product) {
     await answerCallbackQuery(callbackId);
     return;
   }
-  const s = shop as Shop;
+  const s = shopWithCart as unknown as Shop;
   const p = product as Product;
 
-  const items = await getCartItems(s.id);
-  const current = getCartQty(items, productId);
+  // Supabase embedded select natijasi array yoki object bo'lishi mumkin — ikkalasini ham qo'llab-quvvatlaymiz
+  const cartsField = (shopWithCart as any).carts;
+  const items: CartItem[] = Array.isArray(cartsField)
+    ? cartsField[0]?.items ?? []
+    : cartsField?.items ?? [];
 
+  const current = getCartQty(items, productId);
   let next = direction === "inc" ? current + QTY_STEP : current - QTY_STEP;
   if (next < 0) next = 0;
   if (next > p.stock_qty) next = p.stock_qty;
 
   const updatedItems = computeUpdatedItems(items, productId, next);
 
-  // Saqlash, tugmani yangilash va callback'ga javobni PARALLEL bajaramiz
+  // Saqlash, tugmani yangilash va callback'ga javob — PARALLEL
   await Promise.all([
     saveCartItems(s.id, updatedItems),
     editMessageReplyMarkup(chatId, messageId, [qtyStepperRow(productId, next)]),
