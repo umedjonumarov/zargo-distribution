@@ -37,3 +37,10 @@ export type Cart = {
   items: CartItem[];
   updated_at: string;
 };
+
+export type PendingQtyInput = {
+  shop_id: string;
+  product_id: string;
+  message_id: number;
+  created_at: string;
+};
