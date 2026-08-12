@@ -18,3 +18,22 @@ export type Shop = {
   current_debt: number;
   status: "pending_link" | "active" | "blocked";
 };
+
+export type Product = {
+  id: string;
+  category: string;
+  name: string;
+  image_url: string | null;
+  price: number;
+  stock_qty: number;
+  low_stock_threshold: number;
+  is_active: boolean;
+};
+
+export type CartItem = { product_id: string; qty: number };
+
+export type Cart = {
+  shop_id: string;
+  items: CartItem[];
+  updated_at: string;
+};
