@@ -1,5 +1,5 @@
 import { supabase, Shop, Product, CartItem } from "../lib/supabase.js";
-import { sendMessage, sendPhoto, answerCallbackQuery, InlineButton } from "../lib/telegram.js";
+import { sendMessage, sendPhoto, answerCallbackQuery, editMessageReplyMarkup, InlineButton } from "../lib/telegram.js";
 import { t, langLabel, Lang, getCategoryLabel } from "../lib/i18n.js";
 
 // ---------------------------------------------------------
@@ -187,6 +187,28 @@ async function addToCart(shopId: string, productId: string, qty: number) {
   await saveCartItems(shopId, items);
 }
 
+// Mahsulot uchun savatdagi miqdorni ANIQ shu songa o'rnatadi (0 bo'lsa o'chiradi)
+async function setCartItemQty(shopId: string, productId: string, qty: number): Promise<CartItem[]> {
+  const items = await getCartItems(shopId);
+  const existing = items.find((i) => i.product_id === productId);
+  if (qty <= 0) {
+    const filtered = items.filter((i) => i.product_id !== productId);
+    await saveCartItems(shopId, filtered);
+    return filtered;
+  }
+  if (existing) {
+    existing.qty = qty;
+  } else {
+    items.push({ product_id: productId, qty });
+  }
+  await saveCartItems(shopId, items);
+  return items;
+}
+
+function getCartQty(items: CartItem[], productId: string): number {
+  return items.find((i) => i.product_id === productId)?.qty ?? 0;
+}
+
 // ---------------------------------------------------------
 // "Буюртма бериш" — kategoriyalarni ko'rsatish
 // ---------------------------------------------------------
@@ -212,8 +234,11 @@ async function handleShowCategories(chatId: number, shop: Shop, lang: Lang) {
   await sendMessage(chatId, t.chooseCategory[lang], buttons);
 }
 
+const QTY_STEP = 5;
+
 // ---------------------------------------------------------
 // Kategoriya tanlanganda — shu kategoriyadagi tovarlarni ko'rsatish
+// (har tovar oldida jonli −/+ hisoblagich bilan)
 // ---------------------------------------------------------
 async function handleShowProducts(
   chatId: number,
@@ -228,7 +253,8 @@ async function handleShowProducts(
 
   await answerCallbackQuery(callbackId);
   if (!shop) return;
-  const lang = (shop as Shop).language as Lang;
+  const s = shop as Shop;
+  const lang = s.language as Lang;
 
   const { data: products } = await supabase
     .from("products")
@@ -242,17 +268,15 @@ async function handleShowProducts(
     return;
   }
 
+  const cartItems = await getCartItems(s.id);
+
   for (const product of products as Product[]) {
+    const currentQty = getCartQty(cartItems, product.id);
     const caption = `<b>${product.name}</b>\n${product.price.toLocaleString(
       "ru-RU"
     )} сўм / дона\nОмборда: ${product.stock_qty} дона`;
 
-    const qtyButtons: InlineButton[] = [10, 20, 50].map((qty) => ({
-      text: `+${qty}`,
-      callback_data: `add_${product.id}_${qty}`,
-    }));
-
-    const buttons: InlineButton[][] = [qtyButtons];
+    const buttons: InlineButton[][] = [qtyStepperRow(product.id, currentQty)];
 
     if (product.image_url) {
       await sendPhoto(chatId, product.image_url, caption, buttons);
@@ -265,13 +289,27 @@ async function handleShowProducts(
     [{ text: t.viewCart[lang], callback_data: "cart_view" }],
     [{ text: t.backToCategories[lang], callback_data: "menu_order" }],
   ];
-  await sendMessage(chatId, "—", navButtons);
+  await sendMessage(chatId, t.chooseCategory[lang], navButtons);
+}
+
+function qtyStepperRow(productId: string, qty: number): InlineButton[] {
+  return [
+    { text: "➖", callback_data: `dec_${productId}` },
+    { text: `${qty} дона`, callback_data: "noop" },
+    { text: "➕", callback_data: `inc_${productId}` },
+  ];
 }
 
 // ---------------------------------------------------------
-// Savatga qo'shish (add_<productId>_<qty>)
+// −/+ tugmalari bosilganda — savatdagi miqdorni jonli yangilaydi
 // ---------------------------------------------------------
-async function handleAddToCart(chatId: number, callbackId: string, data: string) {
+async function handleQtyChange(
+  chatId: number,
+  callbackId: string,
+  messageId: number,
+  direction: "inc" | "dec",
+  productId: string
+) {
   const { data: shop } = await supabase
     .from("shops")
     .select("*")
@@ -283,13 +321,6 @@ async function handleAddToCart(chatId: number, callbackId: string, data: string)
     return;
   }
   const s = shop as Shop;
-  const lang = s.language as Lang;
-
-  // "add_<productId>_<qty>" — productId uuid ichida "_" bo'lmaydi, oxirgi qism qty
-  const withoutPrefix = data.replace(/^add_/, "");
-  const lastUnderscore = withoutPrefix.lastIndexOf("_");
-  const productId = withoutPrefix.slice(0, lastUnderscore);
-  const qty = parseInt(withoutPrefix.slice(lastUnderscore + 1), 10);
 
   const { data: product } = await supabase
     .from("products")
@@ -301,9 +332,18 @@ async function handleAddToCart(chatId: number, callbackId: string, data: string)
     await answerCallbackQuery(callbackId);
     return;
   }
+  const p = product as Product;
 
-  await addToCart(s.id, productId, qty);
-  await answerCallbackQuery(callbackId, t.addedToCart[lang]((product as Product).name, qty));
+  const items = await getCartItems(s.id);
+  const current = getCartQty(items, productId);
+
+  let next = direction === "inc" ? current + QTY_STEP : current - QTY_STEP;
+  if (next < 0) next = 0;
+  if (next > p.stock_qty) next = p.stock_qty;
+
+  await setCartItemQty(s.id, productId, next);
+  await answerCallbackQuery(callbackId);
+  await editMessageReplyMarkup(chatId, messageId, [qtyStepperRow(productId, next)]);
 }
 
 // ---------------------------------------------------------
@@ -494,8 +534,13 @@ export default async function handler(req: any, res: any) {
         await handleLanguageChoice(chatId, callbackId, data);
       } else if (data.startsWith("cat_")) {
         await handleShowProducts(chatId, callbackId, data.replace("cat_", ""));
-      } else if (data.startsWith("add_")) {
-        await handleAddToCart(chatId, callbackId, data);
+      } else if (data.startsWith("dec_") || data.startsWith("inc_")) {
+        const messageId = update.callback_query.message.message_id as number;
+        const direction = data.startsWith("dec_") ? "dec" : "inc";
+        const productId = data.replace(/^(dec_|inc_)/, "");
+        await handleQtyChange(chatId, callbackId, messageId, direction, productId);
+      } else if (data === "noop") {
+        await answerCallbackQuery(callbackId);
       } else if (data === "cart_view") {
         await handleViewCart(chatId, callbackId);
       } else if (data === "cart_clear") {
