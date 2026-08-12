@@ -188,21 +188,24 @@ async function addToCart(shopId: string, productId: string, qty: number) {
 }
 
 // Mahsulot uchun savatdagi miqdorni ANIQ shu songa o'rnatadi (0 bo'lsa o'chiradi)
+// (bu — DB'ga yozadigan versiya, allaqachon items massivi bo'lmasa)
 async function setCartItemQty(shopId: string, productId: string, qty: number): Promise<CartItem[]> {
   const items = await getCartItems(shopId);
-  const existing = items.find((i) => i.product_id === productId);
+  const next = computeUpdatedItems(items, productId, qty);
+  await saveCartItems(shopId, next);
+  return next;
+}
+
+// Sof funksiya — DB'ga murojaat qilmaydi, faqat massivni hisoblaydi
+function computeUpdatedItems(items: CartItem[], productId: string, qty: number): CartItem[] {
   if (qty <= 0) {
-    const filtered = items.filter((i) => i.product_id !== productId);
-    await saveCartItems(shopId, filtered);
-    return filtered;
+    return items.filter((i) => i.product_id !== productId);
   }
+  const existing = items.find((i) => i.product_id === productId);
   if (existing) {
-    existing.qty = qty;
-  } else {
-    items.push({ product_id: productId, qty });
+    return items.map((i) => (i.product_id === productId ? { ...i, qty } : i));
   }
-  await saveCartItems(shopId, items);
-  return items;
+  return [...items, { product_id: productId, qty }];
 }
 
 function getCartQty(items: CartItem[], productId: string): number {
@@ -310,28 +313,17 @@ async function handleQtyChange(
   direction: "inc" | "dec",
   productId: string
 ) {
-  const { data: shop } = await supabase
-    .from("shops")
-    .select("*")
-    .eq("telegram_chat_id", chatId)
-    .maybeSingle();
+  // Shop va Product'ni PARALLEL so'raymiz (ketma-ket emas) — tezlik uchun
+  const [{ data: shop }, { data: product }] = await Promise.all([
+    supabase.from("shops").select("*").eq("telegram_chat_id", chatId).maybeSingle(),
+    supabase.from("products").select("*").eq("id", productId).maybeSingle(),
+  ]);
 
-  if (!shop) {
+  if (!shop || !product) {
     await answerCallbackQuery(callbackId);
     return;
   }
   const s = shop as Shop;
-
-  const { data: product } = await supabase
-    .from("products")
-    .select("*")
-    .eq("id", productId)
-    .maybeSingle();
-
-  if (!product) {
-    await answerCallbackQuery(callbackId);
-    return;
-  }
   const p = product as Product;
 
   const items = await getCartItems(s.id);
@@ -341,9 +333,14 @@ async function handleQtyChange(
   if (next < 0) next = 0;
   if (next > p.stock_qty) next = p.stock_qty;
 
-  await setCartItemQty(s.id, productId, next);
-  await answerCallbackQuery(callbackId);
-  await editMessageReplyMarkup(chatId, messageId, [qtyStepperRow(productId, next)]);
+  const updatedItems = computeUpdatedItems(items, productId, next);
+
+  // Saqlash, tugmani yangilash va callback'ga javobni PARALLEL bajaramiz
+  await Promise.all([
+    saveCartItems(s.id, updatedItems),
+    editMessageReplyMarkup(chatId, messageId, [qtyStepperRow(productId, next)]),
+    answerCallbackQuery(callbackId),
+  ]);
 }
 
 // ---------------------------------------------------------
