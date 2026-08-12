@@ -59,3 +59,23 @@ export async function answerCallbackQuery(callbackQueryId: string, text?: string
     body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
   });
 }
+
+export async function editMessageReplyMarkup(
+  chatId: number | string,
+  messageId: number,
+  buttons: InlineButton[][]
+) {
+  const res = await fetch(`${TG_API}/editMessageReplyMarkup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { inline_keyboard: buttons },
+    }),
+  });
+  if (!res.ok) {
+    console.error("editMessageReplyMarkup xato:", await res.text());
+  }
+  return res.json();
+}
