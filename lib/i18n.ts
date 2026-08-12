@@ -69,6 +69,74 @@ export const t = {
     tj: "Мебахшед, маҳдудияти қарз пур шудааст. Бо администратор тамос гиред.",
     ru: "Извините, лимит долга исчерпан. Свяжитесь с администратором.",
   },
+  chooseCategory: {
+    uz: "Категорияни танланг:",
+    tj: "Категорияро интихоб кунед:",
+    ru: "Выберите категорию:",
+  },
+  noCategories: {
+    uz: "Ҳозирча тегишли тoвар йўқ.",
+    tj: "Ҳоло мол мавҷуд нест.",
+    ru: "Товаров пока нет.",
+  },
+  addedToCart: {
+    uz: (name: string, qty: number) => `✅ Саватга қўшилди: ${name} × ${qty}`,
+    tj: (name: string, qty: number) => `✅ Ба сабад илова шуд: ${name} × ${qty}`,
+    ru: (name: string, qty: number) => `✅ Добавлено в корзину: ${name} × ${qty}`,
+  },
+  viewCart: {
+    uz: "🧺 Саватни кўриш",
+    tj: "🧺 Дидани сабад",
+    ru: "🧺 Смотреть корзину",
+  },
+  backToCategories: {
+    uz: "⬅️ Категорияларга қайтиш",
+    tj: "⬅️ Бозгашт ба категорияҳо",
+    ru: "⬅️ Назад к категориям",
+  },
+  cartEmpty: {
+    uz: "Саватингиз бўш. Аввал товар танланг.",
+    tj: "Сабади шумо холист. Аввал мол интихоб кунед.",
+    ru: "Ваша корзина пуста. Сначала выберите товар.",
+  },
+  cartHeader: {
+    uz: "🧾 Саватингиз:",
+    tj: "🧾 Сабади шумо:",
+    ru: "🧾 Ваша корзина:",
+  },
+  cartTotal: {
+    uz: (total: number) => `Жами: ${total.toLocaleString("ru-RU")} сўм`,
+    tj: (total: number) => `Ҳамагӣ: ${total.toLocaleString("ru-RU")} сомонӣ`,
+    ru: (total: number) => `Итого: ${total.toLocaleString("ru-RU")} сум`,
+  },
+  confirmOrderBtn: {
+    uz: "✅ Буюртмани тасдиқлаш",
+    tj: "✅ Фармоишро тасдиқ кардан",
+    ru: "✅ Подтвердить заказ",
+  },
+  clearCartBtn: {
+    uz: "🗑 Саватни тозалаш",
+    tj: "🗑 Тоза кардани сабад",
+    ru: "🗑 Очистить корзину",
+  },
+  cartCleared: {
+    uz: "Савват тозаланди.",
+    tj: "Сабад тоза карда шуд.",
+    ru: "Корзина очищена.",
+  },
+  orderConfirmed: {
+    uz: (oldDebt: number, newDebt: number) =>
+      `✅ Буюртма қабул қилинди!\n\nЭски қарзингиз: ${oldDebt.toLocaleString("ru-RU")} сўм\nЯнги қарз: ${newDebt.toLocaleString("ru-RU")} сўм`,
+    tj: (oldDebt: number, newDebt: number) =>
+      `✅ Фармоиш қабул шуд!\n\nҚарзи кӯҳна: ${oldDebt.toLocaleString("ru-RU")} сомонӣ\nҚарзи нав: ${newDebt.toLocaleString("ru-RU")} сомонӣ`,
+    ru: (oldDebt: number, newDebt: number) =>
+      `✅ Заказ принят!\n\nСтарый долг: ${oldDebt.toLocaleString("ru-RU")} сум\nНовый долг: ${newDebt.toLocaleString("ru-RU")} сум`,
+  },
+  orderPendingApproval: {
+    uz: "⏳ Буюртмангиз лимитдан ошди, администратор тасдиқлашини кутинг.",
+    tj: "⏳ Фармоиши шумо аз маҳдудият зиёд шуд, интизори тасдиқи администратор шавед.",
+    ru: "⏳ Ваш заказ превышает лимит, ожидайте подтверждения администратора.",
+  },
 };
 
 export const langLabel: Record<Lang, string> = {
@@ -76,3 +144,15 @@ export const langLabel: Record<Lang, string> = {
   tj: "🇹🇯 Тоҷикӣ",
   ru: "🇷🇺 Русский",
 };
+
+// Baza'dagi category qiymati (Lotin, masalan "Shokolad") -> ko'rinadigan nom
+export const categoryLabel: Record<string, Record<Lang, string>> = {
+  Shokolad: { uz: "🍫 Шоколад", tj: "🍫 Шоколад", ru: "🍫 Шоколад" },
+  Saqiz: { uz: "🍬 Сагиз", tj: "🍬 Сагиз", ru: "🍬 Жвачка" },
+  Shirinlik: { uz: "🍭 Ширинлик", tj: "🍭 Ширинӣ", ru: "🍭 Сладости" },
+  Sok: { uz: "🥤 Соки", tj: "🥤 Шарбат", ru: "🥤 Сок" },
+};
+
+export function getCategoryLabel(category: string, lang: Lang): string {
+  return categoryLabel[category]?.[lang] ?? category;
+}
