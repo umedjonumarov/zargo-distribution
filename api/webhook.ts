@@ -298,7 +298,7 @@ async function handleShowProducts(
 function qtyStepperRow(productId: string, qty: number): InlineButton[] {
   return [
     { text: "🔴 −", callback_data: `dec_${productId}` },
-    { text: `${qty} дона`, callback_data: "noop" },
+    { text: `✏️ ${qty} дона`, callback_data: `qty_${productId}` },
     { text: "🟡 +", callback_data: `inc_${productId}` },
   ];
 }
@@ -350,6 +350,94 @@ async function handleQtyChange(
     editMessageReplyMarkup(chatId, messageId, [qtyStepperRow(productId, next)]),
     answerCallbackQuery(callbackId),
   ]);
+}
+
+// ---------------------------------------------------------
+// Ortadagi raqam bosilganda — "miqdorni yozing" deb so'raymiz
+// va shu tovar/xabarni "kutilayotgan holat" sifatida saqlaymiz
+// ---------------------------------------------------------
+async function handlePromptQtyInput(
+  chatId: number,
+  callbackId: string,
+  messageId: number,
+  productId: string
+) {
+  const { data: shop } = await supabase
+    .from("shops")
+    .select("*")
+    .eq("telegram_chat_id", chatId)
+    .maybeSingle();
+
+  if (!shop) {
+    await answerCallbackQuery(callbackId);
+    return;
+  }
+  const s = shop as Shop;
+  const lang = s.language as Lang;
+
+  await Promise.all([
+    supabase
+      .from("pending_qty_input")
+      .upsert({ shop_id: s.id, product_id: productId, message_id: messageId }),
+    answerCallbackQuery(callbackId, t.typeQtyPrompt[lang], true),
+  ]);
+}
+
+// ---------------------------------------------------------
+// Do'kon oddiy matn (raqam) yozganda — agar "kutilayotgan holat" bo'lsa,
+// shu raqamni tegishli tovar miqdoriga o'rnatamiz
+// ---------------------------------------------------------
+async function handleTextAsQtyInput(chatId: number, text: string): Promise<boolean> {
+  const { data: shop } = await supabase
+    .from("shops")
+    .select("*")
+    .eq("telegram_chat_id", chatId)
+    .maybeSingle();
+
+  if (!shop) return false;
+  const s = shop as Shop;
+  const lang = s.language as Lang;
+
+  const { data: pending } = await supabase
+    .from("pending_qty_input")
+    .select("*")
+    .eq("shop_id", s.id)
+    .maybeSingle();
+
+  if (!pending) return false; // hech qanday kutilayotgan holat yo'q — oddiy xabar sifatida e'tiborsiz qoldiramiz
+
+  const qty = parseInt(text.trim(), 10);
+  if (isNaN(qty) || qty < 0 || !/^\d+$/.test(text.trim())) {
+    await sendMessage(chatId, t.invalidQty[lang]);
+    return true;
+  }
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("*")
+    .eq("id", pending.product_id)
+    .maybeSingle();
+
+  if (!product) {
+    await supabase.from("pending_qty_input").delete().eq("shop_id", s.id);
+    return true;
+  }
+  const p = product as Product;
+  const clamped = Math.min(qty, p.stock_qty);
+
+  const items = await getCartItems(s.id);
+  const updatedItems = computeUpdatedItems(items, pending.product_id, clamped);
+
+  await Promise.all([
+    saveCartItems(s.id, updatedItems),
+    editMessageReplyMarkup(chatId, pending.message_id, [
+      qtyStepperRow(pending.product_id, clamped),
+    ]),
+    supabase.from("pending_qty_input").delete().eq("shop_id", s.id),
+  ]);
+
+  await sendMessage(chatId, t.qtySetConfirmed[lang](p.name, clamped));
+  return true;
 }
 
 // ---------------------------------------------------------
@@ -528,12 +616,16 @@ export default async function handler(req: any, res: any) {
         const parts = text.split(" ");
         const payload = parts[1]; // /start <shop_id> bo'lsa shu yerda keladi
         await handleStart(chatId, payload);
+      } else {
+        // Agar do'kon miqdorni qo'lda yozayotgan bo'lsa (pending_qty_input bor bo'lsa) — shuni tekshiramiz
+        await handleTextAsQtyInput(chatId, text);
       }
     }
 
     if (update.callback_query) {
       const chatId = update.callback_query.message.chat.id as number;
       const callbackId = update.callback_query.id as string;
+      const messageId = update.callback_query.message.message_id as number;
       const data = update.callback_query.data as string;
 
       if (data.startsWith("lang_")) {
@@ -541,12 +633,12 @@ export default async function handler(req: any, res: any) {
       } else if (data.startsWith("cat_")) {
         await handleShowProducts(chatId, callbackId, data.replace("cat_", ""));
       } else if (data.startsWith("dec_") || data.startsWith("inc_")) {
-        const messageId = update.callback_query.message.message_id as number;
         const direction = data.startsWith("dec_") ? "dec" : "inc";
         const productId = data.replace(/^(dec_|inc_)/, "");
         await handleQtyChange(chatId, callbackId, messageId, direction, productId);
-      } else if (data === "noop") {
-        await answerCallbackQuery(callbackId);
+      } else if (data.startsWith("qty_")) {
+        const productId = data.replace("qty_", "");
+        await handlePromptQtyInput(chatId, callbackId, messageId, productId);
       } else if (data === "cart_view") {
         await handleViewCart(chatId, callbackId);
       } else if (data === "cart_clear") {
