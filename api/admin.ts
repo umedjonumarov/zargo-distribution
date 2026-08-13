@@ -1,4 +1,6 @@
 import { supabase } from "../lib/supabase.js";
+import { sendMessage } from "../lib/telegram.js";
+import { t, Lang } from "../lib/i18n.js";
 
 function checkPassword(req: any): boolean {
   const provided =
@@ -49,6 +51,29 @@ export default async function handler(req: any, res: any) {
           .update({ status: "confirmed", confirmed_by: "admin" })
           .eq("id", orderId);
         if (error) throw new Error(error.message);
+
+        // Do'kon egasiga tasdiqlanganini xabar qilamiz
+        const { data: order } = await supabase
+          .from("orders")
+          .select("shop_id, total_amount")
+          .eq("id", orderId)
+          .maybeSingle();
+
+        if (order) {
+          const { data: shop } = await supabase
+            .from("shops")
+            .select("telegram_chat_id, language, current_debt")
+            .eq("id", order.shop_id)
+            .maybeSingle();
+
+          if (shop?.telegram_chat_id && shop.language) {
+            const lang = shop.language as Lang;
+            const newDebt = Number(shop.current_debt);
+            const oldDebt = newDebt - Number(order.total_amount);
+            await sendMessage(shop.telegram_chat_id, t.orderConfirmed[lang](oldDebt, newDebt));
+          }
+        }
+
         res.status(200).json({ ok: true });
         return;
       }
@@ -66,6 +91,22 @@ export default async function handler(req: any, res: any) {
           note: "Admin panel orqali qabul qilindi",
         });
         if (error) throw new Error(error.message);
+
+        // Do'kon egasiga botdan avtomatik xabar yuboramiz
+        const { data: shop } = await supabase
+          .from("shops")
+          .select("telegram_chat_id, language, current_debt")
+          .eq("id", shopId)
+          .maybeSingle();
+
+        if (shop?.telegram_chat_id && shop.language) {
+          const lang = shop.language as Lang;
+          await sendMessage(
+            shop.telegram_chat_id,
+            t.paymentReceived[lang](amount, Number(shop.current_debt))
+          );
+        }
+
         res.status(200).json({ ok: true });
         return;
       }
