@@ -152,6 +152,14 @@ export const t = {
     tj: (name: string, qty: number) => `✅ ${name}: ${qty} дона таъин шуд`,
     ru: (name: string, qty: number) => `✅ ${name}: установлено ${qty} шт.`,
   },
+  paymentReceived: {
+    uz: (amount: number, newDebt: number) =>
+      `💵 Тўлов қабул қилинди: ${amount.toLocaleString("ru-RU")} сўм\n\nҚолган қарз: ${newDebt.toLocaleString("ru-RU")} сўм`,
+    tj: (amount: number, newDebt: number) =>
+      `💵 Пардохт қабул шуд: ${amount.toLocaleString("ru-RU")} сомонӣ\n\nҚарзи боқимонда: ${newDebt.toLocaleString("ru-RU")} сомонӣ`,
+    ru: (amount: number, newDebt: number) =>
+      `💵 Платёж принят: ${amount.toLocaleString("ru-RU")} сум\n\nОстаток долга: ${newDebt.toLocaleString("ru-RU")} сум`,
+  },
 };
 
 export const langLabel: Record<Lang, string> = {
