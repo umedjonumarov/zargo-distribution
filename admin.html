@@ -96,6 +96,15 @@
   .add-form.open{display:block;}
   .add-form input,.add-form select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;margin-bottom:8px;}
   .add-form label{font-size:11px;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:3px;}
+
+  .qr-overlay{position:fixed;inset:0;background:rgba(15,61,62,.75);display:none;align-items:center;justify-content:center;z-index:90;padding:20px;}
+  .qr-overlay.open{display:flex;}
+  .qr-box{background:var(--cream-card);border-radius:16px;padding:22px;max-width:300px;width:100%;text-align:center;}
+  .qr-box h3{font-size:15px;margin:0 0 4px;}
+  .qr-box p{font-size:11.5px;color:var(--ink-soft);margin:0 0 14px;}
+  .qr-box img{width:220px;height:220px;border-radius:10px;border:1px solid var(--line);}
+  .qr-link-text{font-size:10.5px;color:var(--ink-soft);word-break:break-all;margin:12px 0;padding:8px;background:var(--cream);border-radius:8px;}
+  .qr-box button{width:100%;background:var(--teal-950);color:var(--cream);border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px;}
 </style>
 </head>
 <body>
@@ -107,6 +116,16 @@
     <input type="password" id="pwInput" placeholder="Parol" onkeydown="if(event.key==='Enter') tryLogin()">
     <button onclick="tryLogin()">Kirish</button>
     <div class="lock-error" id="lockError"></div>
+  </div>
+</div>
+
+<div class="qr-overlay" id="qrOverlay">
+  <div class="qr-box">
+    <h3 id="qrShopName">—</h3>
+    <p>Дўкон эгасига шу QR-кодни кўрсатинг — телефон камераси билан скан қилиб, ботни очади</p>
+    <img id="qrImage" src="" alt="QR">
+    <div class="qr-link-text" id="qrLinkText"></div>
+    <button onclick="closeQrModal()">Ёпиш</button>
   </div>
 </div>
 
@@ -179,7 +198,7 @@
 </div>
 
 <script>
-const BOT_USERNAME = 'ZarGoAI_bot'; // Agar bot username boshqacha bo'lsa, shu yerni o'zgartiring
+const BOT_USERNAME = 'zargoai_bot'; // Agar bot username boshqacha bo'lsa, shu yerni o'zgartiring
 let ADMIN_PASSWORD = '';
 
 function tryLogin() {
@@ -333,7 +352,7 @@ function renderShops() {
       : s.status === 'pending_link' ? '<span class="tag neutral">Улaнмаган</span>'
       : '<span class="tag ok">Актив</span>';
     const linkBtn = s.status === 'pending_link'
-      ? `<button class="btn btn-pay" style="margin-top:8px;width:100%;" onclick="copyLinkFor('${s.id}','${s.name.replace(/'/g, "")}')">🔗 Улаш линкини нусха олиш</button>`
+      ? `<button class="btn btn-pay" style="margin-top:8px;width:100%;" onclick="showQrModal('${s.id}','${s.name.replace(/'/g, "")}')">🔗 QR-код / линк</button>`
       : '';
     html += `
       <div class="card">
@@ -359,13 +378,17 @@ function renderShops() {
   document.getElementById('shopsContent').innerHTML = html;
 }
 
-function copyLinkFor(shopId, shopName) {
+function showQrModal(shopId, shopName) {
   const link = `https://t.me/${BOT_USERNAME}?start=${shopId}`;
-  navigator.clipboard.writeText(link).then(() => {
-    alert(`Линк нусха олинди!\n\n${shopName} учун:\n${link}\n\nEndi shu linkni do'kon egasiga Telegram yoki WhatsApp orqali yuboring.`);
-  }).catch(() => {
-    prompt('Линкни қўлда нусха олинг:', link);
-  });
+  document.getElementById('qrShopName').textContent = shopName;
+  document.getElementById('qrImage').src =
+    `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(link)}`;
+  document.getElementById('qrLinkText').textContent = link;
+  document.getElementById('qrOverlay').classList.add('open');
+}
+
+function closeQrModal() {
+  document.getElementById('qrOverlay').classList.remove('open');
 }
 
 function renderOrderCard(o) {
@@ -456,13 +479,17 @@ async function submitAddShop() {
   const debtLimit = parseFloat(document.getElementById('ns-limit').value) || 0;
   if (!name || !ownerName) { alert('Дўкон номи ва эгасининг исмини киритинг'); return; }
   try {
-    await api({ action: 'add_shop', name, ownerName, ownerPhone, debtLimit });
+    const result = await api({ action: 'add_shop', name, ownerName, ownerPhone, debtLimit });
     document.getElementById('ns-name').value = '';
     document.getElementById('ns-owner').value = '';
     document.getElementById('ns-phone').value = '';
     document.getElementById('ns-limit').value = '';
     toggleForm('addShopForm');
     await loadAll();
+    // Yangi do'kon qo'shilgach — QR-kodni DARHOL avtomatik ko'rsatamiz
+    if (result.shop) {
+      showQrModal(result.shop.id, result.shop.name);
+    }
   } catch (e) { alert('Хатолик: ' + e.message); }
 }
 
