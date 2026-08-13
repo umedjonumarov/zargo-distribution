@@ -24,6 +24,15 @@
   body{margin:0;font-family:'Inter',sans-serif;background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased;}
   h1,h2,.disp{font-family:'Fraunces',serif;}
 
+  /* Parol ekrani */
+  .lock-screen{position:fixed;inset:0;background:var(--teal-950);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  .lock-box{background:var(--cream-card);border-radius:16px;padding:28px 22px;max-width:320px;width:100%;text-align:center;}
+  .lock-box h1{font-size:20px;margin:0 0 6px;}
+  .lock-box p{font-size:12.5px;color:var(--ink-soft);margin:0 0 18px;}
+  .lock-box input{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;font-family:inherit;margin-bottom:10px;}
+  .lock-box button{width:100%;background:var(--amber);color:#fff;border:none;border-radius:10px;padding:11px;font-size:13.5px;font-weight:700;cursor:pointer;}
+  .lock-error{color:var(--red);font-size:12px;margin-top:8px;min-height:16px;}
+
   .topbar{position:sticky;top:0;z-index:50;background:var(--teal-950);padding:14px 16px;}
   .topbar-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
   .topbar-title{color:var(--cream);font-size:16px;font-weight:700;}
@@ -53,7 +62,8 @@
   .kpi-value.warn{color:var(--red);}
   .kpi-value.good{color:var(--green);}
 
-  .section-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin:18px 2px 8px;}
+  .section-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin:18px 2px 8px;display:flex;justify-content:space-between;align-items:center;}
+  .add-toggle{background:none;border:1px solid var(--line);color:var(--teal-800);border-radius:20px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;}
 
   .card{background:var(--cream-card);border:1px solid var(--line);border-radius:13px;padding:12px 13px;margin-bottom:8px;}
   .row-between{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
@@ -70,29 +80,41 @@
 
   .btn{border:none;border-radius:9px;padding:8px 13px;font-size:12px;font-weight:700;cursor:pointer;}
   .btn-confirm{background:var(--green);color:#fff;}
-  .btn-confirm:active{opacity:.8;}
   .btn-pay{background:var(--teal-950);color:var(--cream);}
-  .btn-pay:active{opacity:.8;}
+  .btn-add{background:var(--amber);color:#fff;width:100%;padding:10px;margin-top:4px;}
 
   .stock-bar{width:100%;height:5px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:6px;}
   .stock-fill{height:100%;border-radius:4px;}
 
   .order-items{font-size:11.5px;color:var(--ink-soft);margin-top:6px;line-height:1.5;}
-
   .empty-state{text-align:center;padding:30px 10px;color:var(--ink-soft);font-size:12.5px;}
 
   .pay-input-row{display:flex;gap:6px;margin-top:8px;}
   .pay-input-row input{flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:inherit;}
-  .pay-input-row button{flex-shrink:0;}
+
+  .add-form{background:var(--cream-card);border:1px dashed var(--amber);border-radius:13px;padding:13px;margin-bottom:12px;display:none;}
+  .add-form.open{display:block;}
+  .add-form input,.add-form select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;margin-bottom:8px;}
+  .add-form label{font-size:11px;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:3px;}
 </style>
 </head>
 <body>
+
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-box">
+    <h1>🔒 ZarGo Admin</h1>
+    <p>Davom etish uchun parolni kiriting</p>
+    <input type="password" id="pwInput" placeholder="Parol" onkeydown="if(event.key==='Enter') tryLogin()">
+    <button onclick="tryLogin()">Kirish</button>
+    <div class="lock-error" id="lockError"></div>
+  </div>
+</div>
 
 <div class="topbar">
   <div class="topbar-row">
     <div>
       <div class="topbar-title">ZarGo · Админ панел</div>
-      <div class="topbar-sub" id="lastUpdated">Юкланмоқда...</div>
+      <div class="topbar-sub" id="lastUpdated">—</div>
     </div>
     <button class="refresh-btn" onclick="loadAll()">↻ Янгилаш</button>
   </div>
@@ -112,6 +134,21 @@
   </div>
 
   <div class="view" id="view-shops">
+    <div class="section-label">
+      <span>Дўконлар</span>
+      <button class="add-toggle" onclick="toggleForm('addShopForm')">+ Янги дўкон</button>
+    </div>
+    <div class="add-form" id="addShopForm">
+      <label>Дўкон номи</label>
+      <input id="ns-name" placeholder="Масалан: Дўкон №5 — Чорсу">
+      <label>Эгасининг исми</label>
+      <input id="ns-owner" placeholder="Масалан: Аҳмад ака">
+      <label>Телефон</label>
+      <input id="ns-phone" placeholder="+992...">
+      <label>Қарз лимити (сўм)</label>
+      <input id="ns-limit" type="number" placeholder="1000000">
+      <button class="btn btn-add" onclick="submitAddShop()">Дўкон қўшиш</button>
+    </div>
     <div id="shopsContent" class="loading">Юкланмоқда...</div>
   </div>
 
@@ -120,38 +157,74 @@
   </div>
 
   <div class="view" id="view-products">
+    <div class="section-label">
+      <span>Товарлар</span>
+      <button class="add-toggle" onclick="toggleForm('addProductForm')">+ Янги товар</button>
+    </div>
+    <div class="add-form" id="addProductForm">
+      <label>Категория</label>
+      <input id="np-category" placeholder="Масалан: Shokolad">
+      <label>Номи</label>
+      <input id="np-name" placeholder="Масалан: Milka 100g">
+      <label>Нархи (дона)</label>
+      <input id="np-price" type="number" placeholder="5000">
+      <label>Бошланғич қолдиқ</label>
+      <input id="np-stock" type="number" placeholder="200">
+      <label>Расм URL (ихтиёрий)</label>
+      <input id="np-image" placeholder="https://...">
+      <button class="btn btn-add" onclick="submitAddProduct()">Товар қўшиш</button>
+    </div>
     <div id="productsContent" class="loading">Юкланмоқда...</div>
   </div>
 </div>
 
 <script>
-const SUPABASE_URL = 'https://ukzxjtnzcnklmscurhdh.supabase.co';
-const API_KEY = 'sb_publishable_cahjDXhhrT4SF7nndkVHKg_lyqBNE95';
+let ADMIN_PASSWORD = '';
+
+function tryLogin() {
+  const pw = document.getElementById('pwInput').value;
+  if (!pw) return;
+  ADMIN_PASSWORD = pw;
+  fetch('/api/admin', { headers: { 'x-admin-password': pw } })
+    .then(async res => {
+      if (!res.ok) throw new Error('wrong');
+      const data = await res.json();
+      sessionStorage.setItem('zargo_admin_pw', pw);
+      document.getElementById('lockScreen').style.display = 'none';
+      applyData(data);
+    })
+    .catch(() => {
+      document.getElementById('lockError').textContent = "Нотўғри парол, қайта уриниб кўринг";
+    });
+}
+
+// Sahifa ochilganda avval saqlangan parolni tekshiramiz
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = sessionStorage.getItem('zargo_admin_pw');
+  if (saved) {
+    ADMIN_PASSWORD = saved;
+    loadAll();
+  }
+});
 
 let state = { shops: [], products: [], orders: [] };
 
-async function sb(path, options = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      'apikey': API_KEY,
-      'Authorization': `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-      ...(options.method === 'PATCH' || options.method === 'POST' ? { 'Prefer': 'return=representation' } : {}),
-      ...(options.headers || {})
-    }
-  });
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(errText || `HTTP ${res.status}`);
+async function api(body) {
+  const opts = body
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': ADMIN_PASSWORD }, body: JSON.stringify(body) }
+    : { headers: { 'x-admin-password': ADMIN_PASSWORD } };
+  const res = await fetch('/api/admin', opts);
+  if (res.status === 401) {
+    sessionStorage.removeItem('zargo_admin_pw');
+    document.getElementById('lockScreen').style.display = 'flex';
+    throw new Error('Парол нотўғри, қайта киринг');
   }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Хатолик');
+  return data;
 }
 
-function fmt(n) {
-  return Number(n || 0).toLocaleString('ru-RU');
-}
+function fmt(n) { return Number(n || 0).toLocaleString('ru-RU'); }
 
 function showTab(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -160,31 +233,35 @@ function showTab(name) {
   document.querySelector(`.tab[data-tab="${name}"]`).classList.add('active');
 }
 
+function toggleForm(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
 async function loadAll() {
   document.getElementById('globalError').innerHTML = '';
   document.getElementById('lastUpdated').textContent = 'Юкланмоқда...';
   try {
-    const [shops, products, orders] = await Promise.all([
-      sb('shops?select=*&order=current_debt.desc'),
-      sb('products?select=*&order=category'),
-      sb('orders?select=*,shops(name,owner_name),order_items(qty,unit_price,products(name))&order=created_at.desc&limit=30')
-    ]);
-    state.shops = shops || [];
-    state.products = products || [];
-    state.orders = orders || [];
-    renderDashboard();
-    renderShops();
-    renderOrders();
-    renderProducts();
-    const now = new Date();
-    document.getElementById('lastUpdated').textContent =
-      'Янгиланди: ' + now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const data = await api();
+    applyData(data);
   } catch (e) {
     document.getElementById('globalError').innerHTML =
-      `<div class="error-box">Маълумот юкланмади: ${e.message}<br>Supabase калити ёки жадвал номларини текширинг.</div>`;
+      `<div class="error-box">Маълумот юкланмади: ${e.message}</div>`;
     document.getElementById('lastUpdated').textContent = 'Хатолик';
-    console.error(e);
   }
+}
+
+function applyData(data) {
+  state.shops = data.shops || [];
+  state.products = data.products || [];
+  state.orders = data.orders || [];
+  document.getElementById('lockScreen').style.display = 'none';
+  renderDashboard();
+  renderShops();
+  renderOrders();
+  renderProducts();
+  const now = new Date();
+  document.getElementById('lastUpdated').textContent =
+    'Янгиланди: ' + now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
 function renderDashboard() {
@@ -214,7 +291,7 @@ function renderDashboard() {
   `;
 
   if (blockedShops > 0) {
-    html += `<div class="section-label">⚠️ Диққат талаб қилади</div>`;
+    html += `<div class="section-label"><span>⚠️ Диққат талаб қилади</span></div>`;
     state.shops.filter(s => s.status === 'blocked').forEach(s => {
       html += `<div class="card"><div class="card-title">🔴 ${s.name}</div>
         <div class="card-meta">${s.owner_name} — лимит тўлган, қарз ${fmt(s.current_debt)} сўм</div></div>`;
@@ -222,15 +299,13 @@ function renderDashboard() {
   }
 
   if (pendingOrders > 0) {
-    html += `<div class="section-label">⏳ Тасдиқлашни кутаётган буюртмалар</div>`;
-    state.orders.filter(o => o.status === 'pending').forEach(o => {
-      html += renderOrderCard(o);
-    });
+    html += `<div class="section-label"><span>⏳ Тасдиқлашни кутаётган буюртмалар</span></div>`;
+    state.orders.filter(o => o.status === 'pending').forEach(o => { html += renderOrderCard(o); });
   }
 
   const lowStock = state.products.filter(p => p.stock_qty <= p.low_stock_threshold);
   if (lowStock.length > 0) {
-    html += `<div class="section-label">📦 Захираси камайган</div>`;
+    html += `<div class="section-label"><span>📦 Захираси камайган</span></div>`;
     lowStock.forEach(p => {
       const pct = Math.min(100, Math.round((p.stock_qty / (p.low_stock_threshold * 3)) * 100));
       html += `<div class="card"><div class="card-title">${p.name}</div>
@@ -242,7 +317,6 @@ function renderDashboard() {
   if (blockedShops === 0 && pendingOrders === 0 && lowStock.length === 0) {
     html += `<div class="empty-state">✅ Ҳозирча диққат талаб қиладиган нарса йўқ</div>`;
   }
-
   document.getElementById('dashboardContent').innerHTML = html;
 }
 
@@ -254,11 +328,9 @@ function renderShops() {
   let html = '';
   state.shops.forEach(s => {
     const isHigh = Number(s.current_debt) >= Number(s.debt_limit) * 0.8;
-    const statusTag = s.status === 'blocked'
-      ? '<span class="tag warn">Блокланган</span>'
-      : s.status === 'pending_link'
-        ? '<span class="tag neutral">Улaнмаган</span>'
-        : '<span class="tag ok">Актив</span>';
+    const statusTag = s.status === 'blocked' ? '<span class="tag warn">Блокланган</span>'
+      : s.status === 'pending_link' ? '<span class="tag neutral">Улaнмаган</span>'
+      : '<span class="tag ok">Актив</span>';
     html += `
       <div class="card">
         <div class="row-between">
@@ -285,16 +357,11 @@ function renderShops() {
 function renderOrderCard(o) {
   const shopName = o.shops ? o.shops.name : 'Номаълум дўкон';
   const ownerName = o.shops ? o.shops.owner_name : '';
-  const itemsText = (o.order_items || [])
-    .map(i => `${i.products ? i.products.name : '?'} × ${i.qty}`)
-    .join(', ');
-  const statusTag = o.status === 'pending'
-    ? '<span class="tag pending">Кутмоқда</span>'
-    : o.status === 'confirmed'
-      ? '<span class="tag ok">Тасдиқланган</span>'
-      : o.status === 'delivered'
-        ? '<span class="tag ok">Етказилган</span>'
-        : '<span class="tag neutral">Бекор қилинган</span>';
+  const itemsText = (o.order_items || []).map(i => `${i.products ? i.products.name : '?'} × ${i.qty}`).join(', ');
+  const statusTag = o.status === 'pending' ? '<span class="tag pending">Кутмоқда</span>'
+    : o.status === 'confirmed' ? '<span class="tag ok">Тасдиқланган</span>'
+    : o.status === 'delivered' ? '<span class="tag ok">Етказилган</span>'
+    : '<span class="tag neutral">Бекор қилинган</span>';
   const dateStr = new Date(o.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
   let html = `
@@ -350,38 +417,59 @@ function renderProducts() {
 }
 
 async function confirmOrder(orderId) {
-  if (!confirm('Шу буюртмани тасдиқлайсизми? Қарз ва захира автоматик янгиланади.')) return;
+  if (!confirm('Шу буюртмани тасдиқлайсизми?')) return;
   try {
-    await sb(`orders?id=eq.${orderId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'confirmed', confirmed_by: 'admin' })
-    });
+    await api({ action: 'confirm_order', orderId });
     await loadAll();
-  } catch (e) {
-    alert('Хатолик: ' + e.message);
-  }
+  } catch (e) { alert('Хатолик: ' + e.message); }
 }
 
 async function submitPayment(shopId) {
   const input = document.getElementById('pay-' + shopId);
   const amount = parseFloat(input.value);
-  if (!amount || amount <= 0) {
-    alert('Илтимос, тўғри сумма киритинг');
-    return;
-  }
+  if (!amount || amount <= 0) { alert('Илтимос, тўғри сумма киритинг'); return; }
   try {
-    await sb('debt_transactions', {
-      method: 'POST',
-      body: JSON.stringify({ shop_id: shopId, type: 'payment', amount, note: 'Админ панел орқали қабул қилинди' })
-    });
+    await api({ action: 'add_payment', shopId, amount });
     input.value = '';
     await loadAll();
-  } catch (e) {
-    alert('Хатолик: ' + e.message);
-  }
+  } catch (e) { alert('Хатолик: ' + e.message); }
 }
 
-loadAll();
+async function submitAddShop() {
+  const name = document.getElementById('ns-name').value.trim();
+  const ownerName = document.getElementById('ns-owner').value.trim();
+  const ownerPhone = document.getElementById('ns-phone').value.trim();
+  const debtLimit = parseFloat(document.getElementById('ns-limit').value) || 0;
+  if (!name || !ownerName) { alert('Дўкон номи ва эгасининг исмини киритинг'); return; }
+  try {
+    await api({ action: 'add_shop', name, ownerName, ownerPhone, debtLimit });
+    document.getElementById('ns-name').value = '';
+    document.getElementById('ns-owner').value = '';
+    document.getElementById('ns-phone').value = '';
+    document.getElementById('ns-limit').value = '';
+    toggleForm('addShopForm');
+    await loadAll();
+  } catch (e) { alert('Хатолик: ' + e.message); }
+}
+
+async function submitAddProduct() {
+  const category = document.getElementById('np-category').value.trim();
+  const name = document.getElementById('np-name').value.trim();
+  const price = parseFloat(document.getElementById('np-price').value);
+  const stockQty = parseInt(document.getElementById('np-stock').value) || 0;
+  const imageUrl = document.getElementById('np-image').value.trim();
+  if (!category || !name || !price) { alert('Категория, номи ва нархини киритинг'); return; }
+  try {
+    await api({ action: 'add_product', category, name, price, stockQty, imageUrl });
+    document.getElementById('np-category').value = '';
+    document.getElementById('np-name').value = '';
+    document.getElementById('np-price').value = '';
+    document.getElementById('np-stock').value = '';
+    document.getElementById('np-image').value = '';
+    toggleForm('addProductForm');
+    await loadAll();
+  } catch (e) { alert('Хатолик: ' + e.message); }
+}
 </script>
 
 </body>
