@@ -179,6 +179,7 @@
 </div>
 
 <script>
+const BOT_USERNAME = 'ZarGoAI_bot'; // Agar bot username boshqacha bo'lsa, shu yerni o'zgartiring
 let ADMIN_PASSWORD = '';
 
 function tryLogin() {
@@ -331,6 +332,9 @@ function renderShops() {
     const statusTag = s.status === 'blocked' ? '<span class="tag warn">Блокланган</span>'
       : s.status === 'pending_link' ? '<span class="tag neutral">Улaнмаган</span>'
       : '<span class="tag ok">Актив</span>';
+    const linkBtn = s.status === 'pending_link'
+      ? `<button class="btn btn-pay" style="margin-top:8px;width:100%;" onclick="copyLinkFor('${s.id}','${s.name.replace(/'/g, "")}')">🔗 Улаш линкини нусха олиш</button>`
+      : '';
     html += `
       <div class="card">
         <div class="row-between">
@@ -344,6 +348,7 @@ function renderShops() {
             <div class="card-meta">лимит ${fmt(s.debt_limit)}</div>
           </div>
         </div>
+        ${linkBtn}
         <div class="pay-input-row">
           <input type="number" placeholder="Тўлов суммаси" id="pay-${s.id}">
           <button class="btn btn-pay" onclick="submitPayment('${s.id}')">Тўлов қабул қилиш</button>
@@ -352,6 +357,15 @@ function renderShops() {
     `;
   });
   document.getElementById('shopsContent').innerHTML = html;
+}
+
+function copyLinkFor(shopId, shopName) {
+  const link = `https://t.me/${BOT_USERNAME}?start=${shopId}`;
+  navigator.clipboard.writeText(link).then(() => {
+    alert(`Линк нусха олинди!\n\n${shopName} учун:\n${link}\n\nEndi shu linkni do'kon egasiga Telegram yoki WhatsApp orqali yuboring.`);
+  }).catch(() => {
+    prompt('Линкни қўлда нусха олинг:', link);
+  });
 }
 
 function renderOrderCard(o) {
