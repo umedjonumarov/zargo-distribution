@@ -105,6 +105,38 @@
   .qr-box img{width:220px;height:220px;border-radius:10px;border:1px solid var(--line);}
   .qr-link-text{font-size:10.5px;color:var(--ink-soft);word-break:break-all;margin:12px 0;padding:8px;background:var(--cream);border-radius:8px;}
   .qr-box button{width:100%;background:var(--teal-950);color:var(--cream);border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px;}
+
+  .inv-row{display:flex;gap:6px;margin-bottom:8px;align-items:center;}
+  .inv-row input{border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:12.5px;font-family:inherit;}
+  .inv-row .inv-name{flex:2;min-width:0;}
+  .inv-row .inv-qty{flex:0.7;}
+  .inv-row .inv-price{flex:1;}
+  .inv-row .inv-sum{flex:1;color:var(--ink-soft);font-size:11.5px;text-align:right;padding-right:2px;}
+  .inv-row .inv-remove{flex-shrink:0;background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:2px 4px;}
+
+  .print-status{background:var(--cream-card);border:1px solid var(--line);border-radius:13px 13px 0 0;padding:14px 15px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;}
+  .print-status-name{font-weight:700;font-size:13.5px;}
+  .print-status-sub{font-size:11px;color:var(--ink-soft);margin-top:2px;display:flex;align-items:center;gap:6px;}
+  .spinner{width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .check-icon{color:var(--green);font-size:13px;}
+
+  .receipt-wrap{max-height:0;overflow:hidden;transition:max-height .9s cubic-bezier(.2,.8,.2,1);}
+  .receipt-wrap.show{max-height:700px;}
+  .receipt-paper{
+    background:#fdfdfa;color:#1a1a1a;font-family:'Courier New',monospace;
+    padding:18px 16px 26px;margin-top:-1px;
+    box-shadow:0 6px 14px rgba(15,61,62,.18);
+    clip-path:polygon(0% 0%,100% 0%,100% 97%,94% 100%,88% 97%,82% 100%,76% 97%,70% 100%,64% 97%,58% 100%,52% 97%,46% 100%,40% 97%,34% 100%,28% 97%,22% 100%,16% 97%,10% 100%,4% 97%,0% 100%);
+  }
+  .receipt-center{text-align:center;margin-bottom:10px;}
+  .receipt-star{font-size:20px;}
+  .receipt-line{display:flex;justify-content:space-between;font-size:11.5px;padding:3px 0;}
+  .receipt-dashed{border-top:1px dashed #999;margin:8px 0;}
+  .receipt-total-row{display:flex;justify-content:space-between;font-size:14px;font-weight:700;padding:6px 0;}
+  .receipt-meta{font-size:10px;color:#666;margin-top:10px;line-height:1.6;}
+  .receipt-barcode{height:38px;margin:14px 0 4px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 3px,#111 3px 5px,transparent 5px 6px,#111 6px 9px,transparent 9px 11px,#111 11px 12px,transparent 12px 14px);}
+  .receipt-barcode-num{text-align:center;font-size:9px;letter-spacing:2px;color:#444;}
 </style>
 </head>
 <body>
@@ -139,6 +171,7 @@
   </div>
   <div class="tabs">
     <div class="tab active" data-tab="dashboard" onclick="showTab('dashboard')">Дашборд</div>
+    <div class="tab" data-tab="invoice" onclick="showTab('invoice')">📝 Наклад</div>
     <div class="tab" data-tab="shops" onclick="showTab('shops')">Дўконлар</div>
     <div class="tab" data-tab="orders" onclick="showTab('orders')">Буюртмалар</div>
     <div class="tab" data-tab="products" onclick="showTab('products')">Товарлар</div>
@@ -150,6 +183,31 @@
 
   <div class="view active" id="view-dashboard">
     <div id="dashboardContent" class="loading">Юкланмоқда...</div>
+  </div>
+
+  <div class="view" id="view-invoice">
+    <div class="section-label"><span>Янги наклад / чек</span></div>
+    <div class="card">
+      <label style="font-size:11px;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:3px;">Мижоз номи (дўкон ёки харидор)</label>
+      <input id="inv-customer" list="shopNamesList" placeholder="Масалан: Шарифа" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;margin-bottom:8px;">
+      <datalist id="shopNamesList"></datalist>
+      <label style="font-size:11px;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:3px;">Телефон (ихтиёрий)</label>
+      <input id="inv-phone" placeholder="+992..." style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;">
+    </div>
+
+    <div class="section-label"><span>Товарлар</span></div>
+    <div id="invoiceItems"></div>
+    <button class="add-toggle" style="width:100%;padding:9px;margin-bottom:14px;" onclick="addInvoiceRow()">+ Қатор қўшиш</button>
+
+    <div class="card" style="background:var(--teal-950);color:var(--cream);">
+      <div class="row-between">
+        <span style="font-size:13px;font-weight:600;">Жами:</span>
+        <span id="invoiceTotal" style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;">0 сўм</span>
+      </div>
+    </div>
+    <button class="btn btn-add" style="margin-top:10px;" onclick="submitInvoice()">💾 Сақлаш</button>
+
+    <div id="invoiceResult"></div>
   </div>
 
   <div class="view" id="view-shops">
@@ -279,6 +337,10 @@ function applyData(data) {
   renderShops();
   renderOrders();
   renderProducts();
+  const namesList = document.getElementById('shopNamesList');
+  if (namesList) {
+    namesList.innerHTML = state.shops.map(s => `<option value="${s.name}">`).join('');
+  }
   const now = new Date();
   document.getElementById('lastUpdated').textContent =
     'Янгиланди: ' + now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -511,6 +573,137 @@ async function submitAddProduct() {
     await loadAll();
   } catch (e) { alert('Хатолик: ' + e.message); }
 }
+
+// ============ НАКЛАДНОЙ (чек) ============
+let invRowCount = 0;
+
+function addInvoiceRow() {
+  invRowCount++;
+  const id = invRowCount;
+  const container = document.getElementById('invoiceItems');
+  const row = document.createElement('div');
+  row.className = 'inv-row';
+  row.id = 'inv-row-' + id;
+  row.innerHTML = `
+    <input class="inv-name" placeholder="Товар номи" oninput="recalcInvoiceTotal()">
+    <input class="inv-qty" type="number" placeholder="Сон" value="1" oninput="recalcInvoiceTotal()">
+    <input class="inv-price" type="number" placeholder="Нархи" oninput="recalcInvoiceTotal()">
+    <span class="inv-sum" id="inv-sum-${id}">0</span>
+    <button class="inv-remove" onclick="removeInvoiceRow(${id})">✕</button>
+  `;
+  container.appendChild(row);
+  recalcInvoiceTotal();
+}
+
+function removeInvoiceRow(id) {
+  const row = document.getElementById('inv-row-' + id);
+  if (row) row.remove();
+  recalcInvoiceTotal();
+}
+
+function getInvoiceRows() {
+  const rows = document.querySelectorAll('#invoiceItems .inv-row');
+  const items = [];
+  rows.forEach(row => {
+    const name = row.querySelector('.inv-name').value.trim();
+    const qty = parseFloat(row.querySelector('.inv-qty').value) || 0;
+    const price = parseFloat(row.querySelector('.inv-price').value) || 0;
+    const sumEl = row.querySelector('.inv-sum');
+    const sum = qty * price;
+    sumEl.textContent = fmt(sum);
+    if (name && qty > 0 && price > 0) {
+      items.push({ name, qty, unitPrice: price, sum });
+    }
+  });
+  return items;
+}
+
+function recalcInvoiceTotal() {
+  const items = getInvoiceRows();
+  const total = items.reduce((s, i) => s + i.sum, 0);
+  document.getElementById('invoiceTotal').textContent = fmt(total) + ' сўм';
+  return { items, total };
+}
+
+async function submitInvoice() {
+  const customerName = document.getElementById('inv-customer').value.trim();
+  const customerPhone = document.getElementById('inv-phone').value.trim();
+  const { items, total } = recalcInvoiceTotal();
+
+  if (!customerName) { alert('Мижоз номини киритинг'); return; }
+  if (items.length === 0) { alert('Камида битта тoвар қатори тўлдирилиши керак'); return; }
+
+  // 1) Avval "chop etilmoqda" holatini ko'rsatamiz
+  const resultEl = document.getElementById('invoiceResult');
+  resultEl.innerHTML = `
+    <div class="print-status">
+      <div>
+        <div class="print-status-name">${customerName}</div>
+        <div class="print-status-sub"><span class="spinner"></span> Чоп этилмоқда...</div>
+      </div>
+      <div style="font-weight:700;">${fmt(total)} сўм</div>
+    </div>
+    <div class="receipt-wrap" id="receiptWrap"></div>
+  `;
+
+  try {
+    await api({ action: 'create_manual_invoice', customerName, customerPhone, items });
+
+    // 2) Bir oz kutamiz (chop etish hissi uchun), keyin chekni "chiqaramiz"
+    await new Promise(r => setTimeout(r, 700));
+
+    document.querySelector('.print-status-sub').innerHTML = '<span class="check-icon">✅</span> Тайёр';
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ru-RU') + ' ' + now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const barcodeNum = Math.floor(100000000000 + Math.random() * 899999999999);
+
+    const itemsHtml = items.map(i => `
+      <div class="receipt-line"><span>${i.name} × ${i.qty}</span><span>${fmt(i.sum)}</span></div>
+    `).join('');
+
+    document.getElementById('receiptWrap').innerHTML = `
+      <div class="receipt-paper">
+        <div class="receipt-center">
+          <div class="receipt-star">⭐</div>
+          <div style="font-weight:700;font-size:13px;margin-top:4px;">ZARGO</div>
+          <div style="font-size:10px;color:#666;">Наклад / чек</div>
+        </div>
+        <div class="receipt-dashed"></div>
+        ${itemsHtml}
+        <div class="receipt-dashed"></div>
+        <div class="receipt-total-row"><span>ЖАМИ</span><span>${fmt(total)} сўм</span></div>
+        <div class="receipt-meta">
+          Мижоз: ${customerName}<br>
+          ${customerPhone ? 'Тел: ' + customerPhone + '<br>' : ''}
+          Сана: ${dateStr}
+        </div>
+        <div class="receipt-barcode"></div>
+        <div class="receipt-barcode-num">${barcodeNum}</div>
+      </div>
+    `;
+
+    // Animatsiya: bir lahzadan keyin balandlikni ochamiz — qog'oz "sirg'alib chiqadi"
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        document.getElementById('receiptWrap').classList.add('show');
+      }, 100);
+    });
+
+    // Formani tozalaymiz
+    document.getElementById('inv-customer').value = '';
+    document.getElementById('inv-phone').value = '';
+    document.getElementById('invoiceItems').innerHTML = '';
+    document.getElementById('invoiceTotal').textContent = '0 сўм';
+
+    await loadAll();
+  } catch (e) {
+    resultEl.innerHTML = `<div class="error-box">Хатолик: ${e.message}</div>`;
+  }
+}
+
+// Boshlanishda bitta bo'sh qator qo'yamiz
+addInvoiceRow();
 </script>
 
 </body>
