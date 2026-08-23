@@ -156,6 +156,94 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
+      if (action === "create_manual_invoice") {
+        const { customerName, customerPhone, existingShopId, items } = req.body;
+        if (!customerName || !items || items.length === 0) {
+          res.status(400).json({ error: "Mijoz nomi va tovarlar kerak" });
+          return;
+        }
+
+        // 1) Mijozni (shop) topamiz yoki yaratamiz
+        let shopId = existingShopId;
+        if (!shopId) {
+          const { data: existingShop } = await supabase
+            .from("shops")
+            .select("id")
+            .eq("name", customerName)
+            .maybeSingle();
+          if (existingShop) {
+            shopId = existingShop.id;
+          } else {
+            const { data: newShop, error: shopErr } = await supabase
+              .from("shops")
+              .insert({
+                name: customerName,
+                owner_name: customerName,
+                owner_phone: customerPhone || null,
+                debt_limit: 999999999,
+                status: "active",
+              })
+              .select()
+              .single();
+            if (shopErr) throw new Error(shopErr.message);
+            shopId = newShop.id;
+          }
+        }
+
+        // 2) Har bir qator uchun tovarni topamiz yoki yaratamiz
+        const orderItemsPayload: any[] = [];
+        for (const item of items) {
+          const { data: existingProduct } = await supabase
+            .from("products")
+            .select("id")
+            .eq("name", item.name)
+            .maybeSingle();
+
+          let productId: string;
+          if (existingProduct) {
+            productId = existingProduct.id;
+          } else {
+            const { data: newProduct, error: prodErr } = await supabase
+              .from("products")
+              .insert({
+                category: item.category || "Bozor",
+                name: item.name,
+                price: item.unitPrice,
+                stock_qty: 999999,
+                low_stock_threshold: 0,
+                is_active: true,
+              })
+              .select()
+              .single();
+            if (prodErr) throw new Error(prodErr.message);
+            productId = newProduct.id;
+          }
+          orderItemsPayload.push({ product_id: productId, qty: item.qty, unit_price: item.unitPrice });
+        }
+
+        // 3) Buyurtma (nakladnoy) yaratamiz — "pending" -> keyin "confirmed"
+        //    (trigger'lar shu UPDATE orqali ishga tushadi: qarz qo'shiladi)
+        const { data: order, error: orderErr } = await supabase
+          .from("orders")
+          .insert({ shop_id: shopId, status: "pending" })
+          .select()
+          .single();
+        if (orderErr) throw new Error(orderErr.message);
+
+        const itemsWithOrderId = orderItemsPayload.map((i) => ({ ...i, order_id: order.id }));
+        const { error: itemsErr } = await supabase.from("order_items").insert(itemsWithOrderId);
+        if (itemsErr) throw new Error(itemsErr.message);
+
+        const { error: confirmErr } = await supabase
+          .from("orders")
+          .update({ status: "confirmed", confirmed_by: "admin" })
+          .eq("id", order.id);
+        if (confirmErr) throw new Error(confirmErr.message);
+
+        res.status(200).json({ ok: true, orderId: order.id, shopId });
+        return;
+      }
+
       res.status(400).json({ error: "Noma'lum amal (action)" });
       return;
     }
