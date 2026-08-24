@@ -255,7 +255,9 @@
       <input type="hidden" id="rs-product">
       <label>Неча дона келди</label>
       <input id="rs-qty" type="number" placeholder="Масалан: 500">
-      <label>Янги келиш нархи (ихтиёрий, ўзгарган бўлса)</label>
+      <label>Янги упаковка нархи (ихтиёрий — базордан олганда шу ёзилади)</label>
+      <input id="rs-package-cost" type="number" placeholder="Масалан: 390" oninput="onPackageCostInput()">
+      <label>1 дона нархи (эски нарх аллақачон турибди — ўзгармаса шундай қолади)</label>
       <input id="rs-cost" type="number" placeholder="Масалан: 32.5">
       <button class="btn btn-add" onclick="submitRestock()">Кирим қилиш</button>
     </div>
@@ -605,6 +607,8 @@ async function submitAddShop() {
   } catch (e) { alert('Хатолик: ' + e.message); }
 }
 
+let restockSelectedProduct = null;
+
 function onRestockProductInput() {
   const typed = document.getElementById('rs-product-search').value.trim();
   const confirmEl = document.getElementById('rs-product-confirm');
@@ -616,30 +620,44 @@ function onRestockProductInput() {
 
   if (match) {
     hiddenId.value = match.id;
+    restockSelectedProduct = match;
     confirmEl.textContent = `✅ Танланди: ${match.name}`;
     confirmEl.style.color = 'var(--green)';
+    // Eski narxni avtomatik ko'rsatamiz — o'zgartirilmasa shu saqlanadi
+    document.getElementById('rs-cost').value = match.cost_price || '';
+    document.getElementById('rs-package-cost').value = '';
   } else {
     hiddenId.value = '';
+    restockSelectedProduct = null;
     confirmEl.textContent = typed ? '👆 Рўйхатдан аниқ тoвар танланг' : '';
     confirmEl.style.color = 'var(--ink-soft)';
   }
 }
 
+function onPackageCostInput() {
+  const packageCost = parseFloat(document.getElementById('rs-package-cost').value);
+  if (!restockSelectedProduct || !restockSelectedProduct.units_per_package || !packageCost) return;
+  const perUnit = packageCost / restockSelectedProduct.units_per_package;
+  document.getElementById('rs-cost').value = Math.round(perUnit * 100) / 100;
+}
+
 async function submitRestock() {
   const productId = document.getElementById('rs-product').value;
   const qty = parseInt(document.getElementById('rs-qty').value);
-  const newCost = parseFloat(document.getElementById('rs-cost').value) || null;
+  const finalCost = parseFloat(document.getElementById('rs-cost').value) || null;
 
   if (!productId) { alert('Товарни танланг'); return; }
   if (!qty || qty <= 0) { alert('Тўғри миқдор киритинг'); return; }
 
   try {
-    await api({ action: 'restock_product', productId, qtyReceived: qty, newCostPrice: newCost });
+    await api({ action: 'restock_product', productId, qtyReceived: qty, newCostPrice: finalCost });
     document.getElementById('rs-qty').value = '';
     document.getElementById('rs-cost').value = '';
+    document.getElementById('rs-package-cost').value = '';
     document.getElementById('rs-product-search').value = '';
     document.getElementById('rs-product-confirm').textContent = '';
     document.getElementById('rs-product').value = '';
+    restockSelectedProduct = null;
     toggleForm('restockForm');
     await loadAll();
   } catch (e) { alert('Хатолик: ' + e.message); }
