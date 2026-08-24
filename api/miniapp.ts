@@ -124,6 +124,7 @@ export default async function handler(req: any, res: any) {
       }
 
       const oldDebt = Number(shop.current_debt);
+      const willExceedLimit = oldDebt + total > Number(shop.debt_limit);
 
       const { data: order } = await supabase
         .from("orders")
@@ -138,10 +139,22 @@ export default async function handler(req: any, res: any) {
       });
       await supabase.from("order_items").insert(orderItemsPayload);
 
+      // Limit ichida bo'lsa — avtomatik tasdiqlanadi (do'kon darhol tovarni "oldi" deb hisoblanadi).
+      // Limitdan oshsa — "pending" holatda qoladi, admin ko'rib tasdiqlaydi.
+      if (!willExceedLimit) {
+        await supabase.from("orders").update({ status: "confirmed", confirmed_by: "auto" }).eq("id", order.id);
+      }
+
       await saveCartItems(shop.id, []);
 
-      // MUHIM: buyurtma endi avtomatik tasdiqlanmaydi — admin ko'rib,
-      // kerak bo'lsa miqdorlarni tahrirlab, keyin tasdiqlaydi
+      const { data: updatedShop } = await supabase
+        .from("shops")
+        .select("current_debt")
+        .eq("id", shop.id)
+        .maybeSingle();
+      const newDebt = Number(updatedShop?.current_debt ?? oldDebt + total);
+
+      // Har bir yangi buyurtma haqida — holatidan qat'i nazar — adminga DARHOL xabar beramiz
       if (process.env.ADMIN_TELEGRAM_CHAT_ID) {
         const itemsText = items
           .map((i) => {
@@ -149,18 +162,23 @@ export default async function handler(req: any, res: any) {
             return `${p ? p.name : "?"} × ${i.qty}`;
           })
           .join("\n");
+        const statusNote = willExceedLimit
+          ? "⏳ Лимитдан ошди — тасдиқ кутмоқда"
+          : "✅ Автоматик тасдиқланди";
         await sendMessage(
           process.env.ADMIN_TELEGRAM_CHAT_ID,
           `🆕 <b>Янги буюртма</b>\n\nДўкон: ${shop.name} (${shop.owner_name})\n\n${itemsText}\n\nЖами: ${total.toLocaleString(
             "ru-RU"
-          )} сўм\n\nAdmin panel -> Буюртмалар'да кўриб, тасдиқланг.`
+          )} сўм\n${statusNote}`
         );
       }
 
       res.status(200).json({
         ok: true,
-        pending: true,
+        willExceedLimit,
         total,
+        oldDebt,
+        newDebt,
         orderId: order.id,
       });
       return;
