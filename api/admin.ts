@@ -510,7 +510,7 @@ export default async function handler(req: any, res: any) {
 
         const { data: order } = await supabase
           .from("orders")
-          .select("*, shop_id")
+          .select("*, shop_id, order_number")
           .eq("id", orderId)
           .maybeSingle();
         if (!order) {
@@ -521,14 +521,16 @@ export default async function handler(req: any, res: any) {
         const wasConfirmed = order.status === "confirmed";
         const oldTotal = Number(order.total_amount);
 
-        // Eski miqdorlarni ESLAB QOLAMIZ (o'chirishdan oldin) — qoldiqni to'g'rilash uchun kerak
+        // Eski miqdorlarni ESLAB QOLAMIZ (o'chirishdan oldin) — qoldiqni va diff-xabarni tuzish uchun kerak
         const { data: oldItemsData } = await supabase
           .from("order_items")
-          .select("product_id, qty")
+          .select("product_id, qty, products(name)")
           .eq("order_id", orderId);
         const oldQtyMap = new Map<string, number>();
+        const nameMap = new Map<string, string>();
         (oldItemsData || []).forEach((i: any) => {
           oldQtyMap.set(i.product_id, (oldQtyMap.get(i.product_id) || 0) + Number(i.qty));
+          nameMap.set(i.product_id, i.products?.name || "?");
         });
 
         // Eski order_items'larni o'chiramiz, yangilarini qo'shamiz
@@ -542,6 +544,7 @@ export default async function handler(req: any, res: any) {
             items.map((i: any) => i.productId)
           );
         const productMap = new Map((products || []).map((p: any) => [p.id, p]));
+        (products || []).forEach((p: any) => nameMap.set(p.id, p.name));
 
         const newItemsPayload = items.map((item: any) => {
           const p = productMap.get(item.productId);
@@ -606,7 +609,8 @@ export default async function handler(req: any, res: any) {
             });
           }
 
-          // Do'konga xabar beramiz
+          // Do'konga xabar beramiz — nima OLIB TASHLANGANI (chizib), nima QO'SHILGANI,
+          // nima O'ZGARGANI (eski -> yangi) alohida-alohida ko'rsatiladi
           const { data: shopInfo } = await supabase
             .from("shops")
             .select("telegram_chat_id, language, current_debt")
@@ -614,18 +618,28 @@ export default async function handler(req: any, res: any) {
             .maybeSingle();
           if (shopInfo?.telegram_chat_id && shopInfo.language) {
             const lang = shopInfo.language as Lang;
-            const msg =
-              lang === "uz"
-                ? `✏️ Буюртмангиз (№${orderId.slice(0, 8)}) администратор томонидан таҳрирланди.\n\nЯнги сумма: ${newTotal.toLocaleString(
-                    "ru-RU"
-                  )} сўм\nЖорий қарз: ${Number(shopInfo.current_debt).toLocaleString("ru-RU")} сўм`
-                : lang === "tj"
-                ? `✏️ Фармоиши шумо (№${orderId.slice(0, 8)}) аз ҷониби администратор таҳрир шуд.\n\nМаблағи нав: ${newTotal.toLocaleString(
-                    "ru-RU"
-                  )} сомонӣ\nҚарзи ҷорӣ: ${Number(shopInfo.current_debt).toLocaleString("ru-RU")} сомонӣ`
-                : `✏️ Ваш заказ (№${orderId.slice(0, 8)}) был изменён администратором.\n\nНовая сумма: ${newTotal.toLocaleString(
-                    "ru-RU"
-                  )} сум\nТекущий долг: ${Number(shopInfo.current_debt).toLocaleString("ru-RU")} сум`;
+
+            const newQtyMapForMsg = new Map<string, number>();
+            items.forEach((i: any) => {
+              newQtyMapForMsg.set(i.productId, (newQtyMapForMsg.get(i.productId) || 0) + Number(i.qty));
+            });
+            const allIds = new Set([...oldQtyMap.keys(), ...newQtyMapForMsg.keys()]);
+            const diffLines: string[] = [];
+            for (const pid of allIds) {
+              const oldQ = oldQtyMap.get(pid) || 0;
+              const newQ = newQtyMapForMsg.get(pid) || 0;
+              const name = nameMap.get(pid) || "?";
+              if (oldQ > 0 && newQ === 0) {
+                diffLines.push(`<s>${name} × ${oldQ}</s> (олиб ташланди)`);
+              } else if (oldQ === 0 && newQ > 0) {
+                diffLines.push(`+ ${name} × ${newQ} (қўшилди)`);
+              } else if (oldQ !== newQ) {
+                diffLines.push(`${name} × ${oldQ} → × ${newQ}`);
+              }
+            }
+            const diffText = diffLines.length > 0 ? diffLines.join("\n") : "Миқдорлар ўзгармади";
+
+            const msg = t.orderEditedDiff[lang](order.order_number, diffText, newTotal, Number(shopInfo.current_debt));
             await sendMessage(shopInfo.telegram_chat_id, msg);
           }
         }
@@ -635,11 +649,25 @@ export default async function handler(req: any, res: any) {
       }
 
       if (action === "mark_delivered") {
-        const { orderId, paymentMethod, cashAmount, cardAmount } = req.body;
-        if (!orderId || !paymentMethod) {
-          res.status(400).json({ error: "orderId va to'lov turi kerak" });
+        const { orderId, paymentMethod, paidAmount, cashAmount, cardAmount } = req.body;
+        if (!orderId || !paymentMethod || paidAmount === undefined || paidAmount === null) {
+          res.status(400).json({ error: "orderId, to'lov turi va to'langan summa kerak" });
           return;
         }
+
+        const { data: order } = await supabase
+          .from("orders")
+          .select("*, shop_id, order_number, order_items(qty,unit_price,products(name))")
+          .eq("id", orderId)
+          .maybeSingle();
+        if (!order) {
+          res.status(404).json({ error: "Buyurtma topilmadi" });
+          return;
+        }
+
+        const total = Number(order.total_amount);
+        const paid = Math.max(0, Math.min(Number(paidAmount), total));
+        const remaining = Math.round((total - paid) * 100) / 100;
 
         const { error } = await supabase
           .from("orders")
@@ -649,34 +677,83 @@ export default async function handler(req: any, res: any) {
             payment_method: paymentMethod,
             cash_amount: cashAmount || 0,
             card_amount: cardAmount || 0,
+            paid_now: paid,
           })
           .eq("id", orderId);
         if (error) throw new Error(error.message);
 
-        const { data: order } = await supabase
-          .from("orders")
-          .select("shop_id")
-          .eq("id", orderId)
-          .maybeSingle();
-
-        if (order) {
-          const { data: shopInfo } = await supabase
-            .from("shops")
-            .select("telegram_chat_id, language")
-            .eq("id", order.shop_id)
-            .maybeSingle();
-
-          if (shopInfo?.telegram_chat_id && shopInfo.language) {
-            const lang = shopInfo.language as Lang;
-            const methodLabel =
-              { uz: { cash: "Нақд", card: "Карта", mixed: "Аралаш" }, tj: { cash: "Нақд", card: "Карт", mixed: "Омехта" }, ru: { cash: "Наличные", card: "Карта", mixed: "Смешанно" } }[
-                lang
-              ][paymentMethod as "cash" | "card" | "mixed"] || paymentMethod;
-            await sendMessage(shopInfo.telegram_chat_id, t.orderDelivered[lang](orderId, methodLabel));
-          }
+        // Faqat HAQIQATDA qo'lga tegan summa uchun to'lov yozamiz
+        // (qolgan qism allaqachon umumiy qarz sifatida hisobda turadi)
+        if (paid > 0) {
+          await supabase.from("debt_transactions").insert({
+            shop_id: order.shop_id,
+            type: "payment",
+            amount: paid,
+            order_id: orderId,
+            note: `Yetkazishda qabul qilindi (${paymentMethod})`,
+          });
         }
 
-        res.status(200).json({ ok: true });
+        const { data: shopInfo } = await supabase
+          .from("shops")
+          .select("telegram_chat_id, language")
+          .eq("id", order.shop_id)
+          .maybeSingle();
+
+        if (shopInfo?.telegram_chat_id && shopInfo.language) {
+          const lang = shopInfo.language as Lang;
+          const methodLabel =
+            {
+              uz: { cash: "Нақд", card: "Карта", mixed: "Аралаш" },
+              tj: { cash: "Нақд", card: "Карт", mixed: "Омехта" },
+              ru: { cash: "Наличные", card: "Карта", mixed: "Смешанно" },
+            }[lang][paymentMethod as "cash" | "card" | "mixed"] || paymentMethod;
+
+          const itemsText = (order.order_items || [])
+            .map((i: any) => `${i.products ? i.products.name : "?"} × ${i.qty} = ${Number(i.unit_price * i.qty).toLocaleString("ru-RU")}`)
+            .join("\n");
+
+          await sendMessage(
+            shopInfo.telegram_chat_id,
+            t.orderDelivered[lang](order.order_number, itemsText, total, methodLabel, paid, remaining)
+          );
+        }
+
+        res.status(200).json({ ok: true, remaining });
+        return;
+      }
+
+      if (action === "add_order_payment") {
+        const { orderId, amount } = req.body;
+        if (!orderId || !amount || amount <= 0) {
+          res.status(400).json({ error: "Noto'g'ri summa" });
+          return;
+        }
+
+        const { data: order } = await supabase
+          .from("orders")
+          .select("shop_id, total_amount, paid_now")
+          .eq("id", orderId)
+          .maybeSingle();
+        if (!order) {
+          res.status(404).json({ error: "Buyurtma topilmadi" });
+          return;
+        }
+
+        const currentPaid = Number(order.paid_now || 0);
+        const total = Number(order.total_amount);
+        const newPaid = Math.min(currentPaid + Number(amount), total);
+
+        await supabase.from("orders").update({ paid_now: newPaid }).eq("id", orderId);
+        await supabase.from("debt_transactions").insert({
+          shop_id: order.shop_id,
+          type: "payment",
+          amount: Number(amount),
+          order_id: orderId,
+          note: "Qolgan qarz to'lovi (buyurtma bo'yicha)",
+        });
+
+        res.status(200).json({ ok: true, remaining: Math.round((total - newPaid) * 100) / 100 });
         return;
       }
       return;
