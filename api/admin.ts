@@ -299,6 +299,36 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
+      if (action === "restock_product") {
+        const { productId, qtyReceived, newCostPrice } = req.body;
+        if (!qtyReceived || qtyReceived <= 0) {
+          res.status(400).json({ error: "Noto'g'ri miqdor" });
+          return;
+        }
+
+        const { data: product, error: fetchErr } = await supabase
+          .from("products")
+          .select("stock_qty")
+          .eq("id", productId)
+          .maybeSingle();
+        if (fetchErr) throw new Error(fetchErr.message);
+        if (!product) {
+          res.status(404).json({ error: "Tovar topilmadi" });
+          return;
+        }
+
+        const updatePayload: any = {
+          stock_qty: Number(product.stock_qty) + Number(qtyReceived),
+        };
+        if (newCostPrice) updatePayload.cost_price = newCostPrice;
+
+        const { error } = await supabase.from("products").update(updatePayload).eq("id", productId);
+        if (error) throw new Error(error.message);
+
+        res.status(200).json({ ok: true });
+        return;
+      }
+
       res.status(400).json({ error: "Noma'lum amal (action)" });
       return;
     }
