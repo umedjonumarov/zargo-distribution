@@ -138,7 +138,7 @@ export default async function handler(req: any, res: any) {
       }
 
       if (action === "add_product") {
-        const { category, name, price, costPrice, unitsPerPackage, unit, stockQty, lowStockThreshold, imageUrl } = req.body;
+        const { category, name, price, costPrice, unitsPerPackage, unit, barcode, stockQty, lowStockThreshold, imageUrl } = req.body;
         const { error } = await supabase.from("products").insert({
           category,
           name,
@@ -146,6 +146,7 @@ export default async function handler(req: any, res: any) {
           cost_price: costPrice || null,
           units_per_package: unitsPerPackage || null,
           unit: unit || "dona",
+          barcode: barcode || null,
           stock_qty: stockQty || 0,
           low_stock_threshold: lowStockThreshold ?? 20,
           image_url: imageUrl || null,
@@ -157,7 +158,7 @@ export default async function handler(req: any, res: any) {
       }
 
       if (action === "update_product") {
-        const { productId, category, name, price, costPrice, unitsPerPackage, unit, stockQty, lowStockThreshold, imageUrl } = req.body;
+        const { productId, category, name, price, costPrice, unitsPerPackage, unit, barcode, stockQty, lowStockThreshold, imageUrl } = req.body;
         const updatePayload: any = {
           category,
           name,
@@ -165,6 +166,7 @@ export default async function handler(req: any, res: any) {
           cost_price: costPrice || null,
           units_per_package: unitsPerPackage || null,
           unit: unit || "dona",
+          barcode: barcode || null,
           stock_qty: stockQty,
           low_stock_threshold: lowStockThreshold ?? 20,
         };
@@ -174,6 +176,21 @@ export default async function handler(req: any, res: any) {
         const { error } = await supabase.from("products").update(updatePayload).eq("id", productId);
         if (error) throw new Error(error.message);
         res.status(200).json({ ok: true });
+        return;
+      }
+
+      if (action === "find_by_barcode") {
+        const { barcode } = req.body;
+        if (!barcode) {
+          res.status(400).json({ error: "Shtrix-kod yuborilmadi" });
+          return;
+        }
+        const { data: product } = await supabase
+          .from("products")
+          .select("*")
+          .eq("barcode", barcode)
+          .maybeSingle();
+        res.status(200).json({ ok: true, product: product || null });
         return;
       }
 
