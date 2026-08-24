@@ -3,9 +3,13 @@ import { sendMessage } from "../lib/telegram.js";
 import { t, Lang } from "../lib/i18n.js";
 
 function checkPassword(req: any): boolean {
-  const provided =
-    req.headers["x-admin-password"] || req.query?.password || req.body?.password;
-  return provided === process.env.ADMIN_PASSWORD;
+  const provided = (
+    req.headers["x-admin-password"] || req.query?.password || req.body?.password || ""
+  )
+    .toString()
+    .trim();
+  const expected = (process.env.ADMIN_PASSWORD || "").trim();
+  return provided.length > 0 && provided === expected;
 }
 
 export default async function handler(req: any, res: any) {
