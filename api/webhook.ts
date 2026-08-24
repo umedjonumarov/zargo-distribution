@@ -154,7 +154,18 @@ async function handleMenuAction(chatId: number, callbackId: string, action: stri
       await sendMessage(chatId, lines);
     }
   } else if (action === "menu_order") {
-    await handleShowCategories(chatId, s, lang);
+    const miniAppUrl = "https://zargo-distribution.vercel.app/miniapp.html";
+    const openText = {
+      uz: "🛍 Каталогни очиш",
+      tj: "🛍 Кушодани каталог",
+      ru: "🛍 Открыть каталог",
+    }[lang];
+    const introText = {
+      uz: "Янги, қулай дўкон ойнаси тайёр — товарларни кўриб, буюртма беринг 👇",
+      tj: "Равзанаи нави мулоими дукон тайёр аст — молҳоро дида фармоиш диҳед 👇",
+      ru: "Новая удобная витрина готова — смотрите товары и оформляйте заказ 👇",
+    }[lang];
+    await sendMessage(chatId, introText, [[{ text: openText, web_app: { url: miniAppUrl } }]]);
   }
 }
 
