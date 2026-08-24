@@ -681,7 +681,7 @@ function renderOrderCard(o) {
     <div class="card">
       <div class="row-between">
         <div>
-          <div class="card-title">${shopName}</div>
+          <div class="card-title">№${o.order_number} — ${shopName}</div>
           <div class="card-meta">${ownerName} · ${dateStr}</div>
           ${statusTag}
         </div>
@@ -701,19 +701,21 @@ function renderOrderCard(o) {
       <div style="margin-top:8px;">
         <button class="btn" style="width:100%;background:var(--green);color:#fff;" onclick="toggleDeliveryPanel('${shortId}')">🚚 Етказилди деб белгилаш</button>
         <div id="delivery-panel-${shortId}" style="display:none;margin-top:8px;background:var(--cream);border-radius:10px;padding:10px;">
+          <label style="font-size:11px;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:3px;">Ҳозир қабул қилинган сумма (тўлиқ бўлмаса — қолгани қарз бўлиб қолади)</label>
+          <input type="number" id="dp-paid-${shortId}" value="${o.total_amount}" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:12.5px;margin-bottom:8px;">
           <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;">Тўлов тури:</div>
           <div style="display:flex;gap:6px;margin-bottom:8px;">
-            <button class="pay-method-btn" onclick="markDelivered('${o.id}','cash', ${o.total_amount}, 0)" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:11.5px;font-weight:600;">💵 Нақд</button>
-            <button class="pay-method-btn" onclick="markDelivered('${o.id}','card', 0, ${o.total_amount})" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:11.5px;font-weight:600;">💳 Карта</button>
-            <button class="pay-method-btn" onclick="toggleMixedDelivery('${shortId}')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:11.5px;font-weight:600;">🔀 Аралаш</button>
+            <button class="pay-method-btn" data-method="cash" onclick="selectDeliveryMethod('${shortId}','cash')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:11.5px;font-weight:600;">💵 Нақд</button>
+            <button class="pay-method-btn" data-method="card" onclick="selectDeliveryMethod('${shortId}','card')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:11.5px;font-weight:600;">💳 Карта</button>
+            <button class="pay-method-btn" data-method="mixed" onclick="selectDeliveryMethod('${shortId}','mixed')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:11.5px;font-weight:600;">🔀 Аралаш</button>
           </div>
           <div id="mixed-delivery-${shortId}" style="display:none;">
             <div style="display:flex;gap:6px;margin-bottom:6px;">
               <input type="number" id="dm-cash-${shortId}" placeholder="Нақд" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:12px;">
               <input type="number" id="dm-card-${shortId}" placeholder="Карта" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:12px;">
             </div>
-            <button class="btn btn-pay" style="width:100%;" onclick="markDeliveredMixed('${o.id}','${shortId}', ${o.total_amount})">Тасдиқлаш</button>
           </div>
+          <button class="btn btn-pay" id="dp-confirm-${shortId}" style="width:100%;display:none;" onclick="confirmDelivery('${o.id}','${shortId}', ${o.total_amount})">Тасдиқлаш</button>
         </div>
       </div>
     `;
@@ -728,27 +730,45 @@ function toggleDeliveryPanel(shortId) {
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-function toggleMixedDelivery(shortId) {
-  const el = document.getElementById('mixed-delivery-' + shortId);
-  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+let deliverySelectedMethod = {};
+
+function selectDeliveryMethod(shortId, method) {
+  deliverySelectedMethod[shortId] = method;
+  document.querySelectorAll(`#delivery-panel-${shortId} .pay-method-btn`).forEach(b => b.classList.remove('active'));
+  document.querySelector(`#delivery-panel-${shortId} .pay-method-btn[data-method="${method}"]`).classList.add('active');
+  document.getElementById('mixed-delivery-' + shortId).style.display = method === 'mixed' ? 'block' : 'none';
+  document.getElementById('dp-confirm-' + shortId).style.display = 'block';
 }
 
-async function markDelivered(orderId, paymentMethod, cashAmount, cardAmount) {
-  if (!confirm('Буюртма етказилди деб белгилансинми?')) return;
+async function confirmDelivery(orderId, shortId, total) {
+  const method = deliverySelectedMethod[shortId];
+  if (!method) { alert('Тўлов турини танланг'); return; }
+
+  const paidAmount = parseFloat(document.getElementById('dp-paid-' + shortId).value);
+  if (isNaN(paidAmount) || paidAmount < 0) { alert('Тўғри сумма киритинг'); return; }
+
+  let cashAmount = 0, cardAmount = 0;
+  if (method === 'cash') cashAmount = paidAmount;
+  else if (method === 'card') cardAmount = paidAmount;
+  else if (method === 'mixed') {
+    cashAmount = parseFloat(document.getElementById('dm-cash-' + shortId).value) || 0;
+    cardAmount = parseFloat(document.getElementById('dm-card-' + shortId).value) || 0;
+    if (Math.abs((cashAmount + cardAmount) - paidAmount) > 0.01) {
+      alert(`Нақд + Карта = ${fmt(cashAmount + cardAmount)}, лекин тўланган сумма = ${fmt(paidAmount)}. Тенг бўлиши керак!`);
+      return;
+    }
+  }
+
+  const remaining = Number(total) - paidAmount;
+  const confirmText = remaining > 0.01
+    ? `Диққат: ${fmt(remaining)} сўм қарз бўлиб қолади. Давом этасизми?`
+    : 'Буюртма тўлиқ тўланган ҳолда етказилди деб белгилансинми?';
+  if (!confirm(confirmText)) return;
+
   try {
-    await api({ action: 'mark_delivered', orderId, paymentMethod, cashAmount, cardAmount });
+    await api({ action: 'mark_delivered', orderId, paymentMethod: method, paidAmount, cashAmount, cardAmount });
     await loadAll();
   } catch (e) { alert('Хатолик: ' + e.message); }
-}
-
-async function markDeliveredMixed(orderId, shortId, total) {
-  const cash = parseFloat(document.getElementById('dm-cash-' + shortId).value) || 0;
-  const card = parseFloat(document.getElementById('dm-card-' + shortId).value) || 0;
-  if (cash + card !== Number(total)) {
-    alert(`Нақд + Карта = ${fmt(cash + card)}, лекин жами сумма = ${fmt(total)}. Тенг бўлиши керак!`);
-    return;
-  }
-  await markDelivered(orderId, 'mixed', cash, card);
 }
 
 function renderOrders() {
@@ -759,6 +779,7 @@ function renderOrders() {
 
   const pendingApproval = state.orders.filter(o => o.status === 'pending');
   const awaitingDelivery = state.orders.filter(o => o.status === 'confirmed');
+  const unpaidDelivered = state.orders.filter(o => o.status === 'delivered' && (Number(o.total_amount) - Number(o.paid_now || 0)) > 0.01);
   const history = state.orders.filter(o => o.status === 'delivered' || o.status === 'cancelled');
 
   let html = '';
@@ -773,6 +794,11 @@ function renderOrders() {
     html += awaitingDelivery.map(renderOrderCard).join('');
   }
 
+  if (unpaidDelivered.length > 0) {
+    html += `<div class="section-label"><span>💰 Тўланмаган (етказилган) буюртмалар</span></div>`;
+    html += unpaidDelivered.map(renderUnpaidDeliveredCard).join('');
+  }
+
   if (history.length > 0) {
     html += `<div class="section-label"><span>📜 Тарих</span></div>`;
     html += history.map(renderOrderCard).join('');
@@ -783,6 +809,37 @@ function renderOrders() {
   }
 
   document.getElementById('ordersContent').innerHTML = html;
+}
+
+function renderUnpaidDeliveredCard(o) {
+  const shopName = o.shops ? o.shops.name : 'Номаълум дўкон';
+  const remaining = Number(o.total_amount) - Number(o.paid_now || 0);
+  const shortId = o.id;
+  return `
+    <div class="card">
+      <div class="row-between">
+        <div>
+          <div class="card-title">№${o.order_number} — ${shopName}</div>
+          <div class="card-meta">Жами: ${fmt(o.total_amount)} · Тўланган: ${fmt(o.paid_now || 0)}</div>
+        </div>
+        <div class="amount high">${fmt(remaining)} сўм</div>
+      </div>
+      <div class="pay-input-row">
+        <input type="number" placeholder="Тўлов суммаси" id="op-${shortId}">
+        <button class="btn btn-pay" onclick="submitOrderPayment('${o.id}')">Тўлов қабул қилиш</button>
+      </div>
+    </div>
+  `;
+}
+
+async function submitOrderPayment(orderId) {
+  const input = document.getElementById('op-' + orderId);
+  const amount = parseFloat(input.value);
+  if (!amount || amount <= 0) { alert('Тўғри сумма киритинг'); return; }
+  try {
+    await api({ action: 'add_order_payment', orderId, amount });
+    await loadAll();
+  } catch (e) { alert('Хатолик: ' + e.message); }
 }
 
 function unitLabel(unit) {
