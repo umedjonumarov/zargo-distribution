@@ -161,6 +161,7 @@
     <div style="font-weight:700;font-size:14px;">📷 Штрих-код / QR скaнerlash</div>
     <p>Камерани тoвар штрих-кодига қаратинг</p>
     <video id="scannerVideo"></video>
+    <button id="torchBtn" style="display:none;background:var(--amber);">🔦 Чироқни ёқиш</button>
     <button onclick="closeScanner()">Бекор қилиш / Ёпиш</button>
   </div>
 </div>
@@ -375,11 +376,17 @@
 const BOT_USERNAME = 'zargoaibot'; // Agar bot username boshqacha bo'lsa, shu yerni o'zgartiring
 // ============ ШТРИХ-КОД / QR СКAНЕР ============
 let zxingReader = null;
+let torchOn = false;
+let torchTrack = null;
 
 function openScanner(onResult) {
   const overlay = document.getElementById('scannerOverlay');
   overlay.classList.add('open');
   const video = document.getElementById('scannerVideo');
+  const torchBtn = document.getElementById('torchBtn');
+  torchBtn.style.display = 'none';
+  torchOn = false;
+  torchTrack = null;
 
   if (typeof ZXing === 'undefined') {
     alert('Скaнер китобхонаси юкланмади. Интернет алоқасини текширинг.');
@@ -396,6 +403,25 @@ function openScanner(onResult) {
         onResult(text);
       }
     })
+    .then(() => {
+      // Kamera ochilgach — fonar (torch) mavjudligini tekshiramiz (qorong'ida skanerlash uchun)
+      setTimeout(() => {
+        const stream = video.srcObject;
+        if (!stream) return;
+        const track = stream.getVideoTracks()[0];
+        if (!track || !track.getCapabilities) return;
+        const caps = track.getCapabilities();
+        if (caps.torch) {
+          torchTrack = track;
+          torchBtn.style.display = 'block';
+          torchBtn.onclick = () => {
+            torchOn = !torchOn;
+            torchTrack.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => {});
+            torchBtn.textContent = torchOn ? '🔦 Чироқни ўчириш' : '🔦 Чироқни ёқиш';
+          };
+        }
+      }, 600);
+    })
     .catch((err) => {
       alert('Камера очилмади: ' + err.message + '\n\nБраузерга камера рухсатини берганингизни текширинг.');
       closeScanner();
@@ -404,6 +430,9 @@ function openScanner(onResult) {
 
 function closeScanner() {
   document.getElementById('scannerOverlay').classList.remove('open');
+  document.getElementById('torchBtn').style.display = 'none';
+  torchOn = false;
+  torchTrack = null;
   if (zxingReader) {
     try { zxingReader.reset(); } catch (e) {}
     zxingReader = null;
@@ -451,7 +480,15 @@ async function api(body) {
     document.getElementById('lockScreen').style.display = 'flex';
     throw new Error('Парол нотўғри, қайта киринг');
   }
-  const data = await res.json();
+  const rawText = await res.text();
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch (e) {
+    // Server JSON emas, matn qaytardi (masalan "Request Entity Too Large") —
+    // buni o'qib bo'ladigan xatolikka aylantiramiz
+    throw new Error(`Сервер хатоси (${res.status}): ${rawText.slice(0, 120) || 'Номаълум хатолик'}`);
+  }
   if (!res.ok) throw new Error(data.error || 'Хатолик');
   return data;
 }
@@ -864,15 +901,33 @@ function recalcProductPreview() {
 document.getElementById('np-image-file').addEventListener('change', function (e) {
   const file = e.target.files[0];
   if (!file) return;
-  selectedImageType = file.type;
-  selectedImageName = file.name;
   const reader = new FileReader();
   reader.onload = function (ev) {
-    const dataUrl = ev.target.result;
-    selectedImageBase64 = dataUrl.split(',')[1]; // "data:image/jpeg;base64,XXXX" -> faqat XXXX
-    const preview = document.getElementById('np-image-preview');
-    preview.src = dataUrl;
-    preview.style.display = 'block';
+    const img = new Image();
+    img.onload = function () {
+      // Rasmni katta bo'lsa kichraytiramiz (max 900px), sifatini pasaytirib
+      // yuboramiz — aks holda telefon kamerasidagi 3-5 MB rasm serverga sig'may qoladi
+      const maxDim = 900;
+      let w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+        else { w = Math.round((w * maxDim) / h); h = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+
+      selectedImageBase64 = dataUrl.split(',')[1];
+      selectedImageType = 'image/jpeg';
+      selectedImageName = (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
+
+      const preview = document.getElementById('np-image-preview');
+      preview.src = dataUrl;
+      preview.style.display = 'block';
+    };
+    img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 });
