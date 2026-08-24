@@ -460,7 +460,7 @@ function renderShops() {
     const statusTag = s.status === 'blocked' ? '<span class="tag warn">Блокланган</span>'
       : s.status === 'pending_link' ? '<span class="tag neutral">Улaнмаган</span>'
       : '<span class="tag ok">Актив</span>';
-    const linkBtn = s.status === 'pending_link'
+    const linkBtn = !s.telegram_chat_id
       ? `<button class="btn btn-pay" style="margin-top:8px;width:100%;" onclick="showQrModal('${s.id}','${s.name.replace(/'/g, "")}')">🔗 QR-код / линк</button>`
       : '';
     html += `
