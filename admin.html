@@ -226,6 +226,7 @@
 
     <div class="section-label"><span>Товарлар</span></div>
     <div id="invoiceItems"></div>
+    <datalist id="productSearchList"></datalist>
     <div style="display:flex;gap:6px;margin-bottom:14px;">
       <button class="add-toggle" style="flex:1;padding:9px;" onclick="addInvoiceRow()">+ Қатор қўшиш</button>
       <button class="add-toggle" style="flex:1;padding:9px;background:var(--teal-950);color:var(--cream);" onclick="scanForInvoice()">📷 Скaнерлаш</button>
@@ -537,6 +538,10 @@ function applyData(data) {
     rsList.innerHTML = state.products.map(p =>
       `<option value="${p.name} — ${p.category} (ҳозир: ${p.stock_qty} ${unitLabel(p.unit)})" data-id="${p.id}">`
     ).join('');
+  }
+  const invList = document.getElementById('productSearchList');
+  if (invList) {
+    invList.innerHTML = state.products.map(p => `<option value="${p.name}">`).join('');
   }
   const now = new Date();
   document.getElementById('lastUpdated').textContent =
@@ -989,14 +994,51 @@ function addInvoiceRow() {
   const row = document.createElement('div');
   row.className = 'inv-row';
   row.id = 'inv-row-' + id;
+  row.dataset.productId = '';
   row.innerHTML = `
-    <input class="inv-name" placeholder="Товар номи" oninput="recalcInvoiceTotal()">
+    <div style="flex:1;min-width:0;">
+      <input class="inv-name" list="productSearchList" placeholder="Товар номини ёзинг (маc: ele)" style="width:100%;" oninput="onInvoiceProductInput(${id})">
+      <div class="inv-match-status" id="inv-match-${id}" style="font-size:9.5px;color:var(--ink-soft);margin-top:1px;"></div>
+    </div>
     <input class="inv-qty" type="number" placeholder="Сон" value="1" oninput="recalcInvoiceTotal()">
-    <input class="inv-price" type="number" placeholder="Нархи" oninput="recalcInvoiceTotal()">
+    <input class="inv-price" type="number" placeholder="Нархи" readonly style="background:var(--cream);">
     <span class="inv-sum" id="inv-sum-${id}">0</span>
     <button class="inv-remove" onclick="removeInvoiceRow(${id})">✕</button>
   `;
   container.appendChild(row);
+  recalcInvoiceTotal();
+}
+
+function onInvoiceProductInput(id) {
+  const row = document.getElementById('inv-row-' + id);
+  const typed = row.querySelector('.inv-name').value.trim().toLowerCase();
+  const statusEl = document.getElementById('inv-match-' + id);
+  const priceInput = row.querySelector('.inv-price');
+
+  // Aniq mos kelishini tekshiramiz (katta-kichik harf farqisiz)
+  const exact = state.products.find(p => p.name.toLowerCase() === typed);
+
+  if (exact) {
+    row.dataset.productId = exact.id;
+    priceInput.value = exact.price;
+    priceInput.readOnly = true;
+    statusEl.textContent = `✅ ${exact.name} (${fmt(exact.price)} сўм)`;
+    statusEl.style.color = 'var(--green)';
+  } else {
+    row.dataset.productId = '';
+    priceInput.value = '';
+    priceInput.readOnly = true;
+    if (typed.length === 0) {
+      statusEl.textContent = '';
+    } else {
+      // Qisman mos keladigan takliflarni ko'rsatamiz
+      const suggestions = state.products.filter(p => p.name.toLowerCase().includes(typed)).slice(0, 3);
+      statusEl.textContent = suggestions.length > 0
+        ? '👆 Рўйхатдан танланг: ' + suggestions.map(p => p.name).join(', ')
+        : '❌ Бундай товар топилмади';
+      statusEl.style.color = suggestions.length > 0 ? 'var(--amber-dark)' : 'var(--red)';
+    }
+  }
   recalcInvoiceTotal();
 }
 
@@ -1013,11 +1055,12 @@ function getInvoiceRows() {
     const name = row.querySelector('.inv-name').value.trim();
     const qty = parseFloat(row.querySelector('.inv-qty').value) || 0;
     const price = parseFloat(row.querySelector('.inv-price').value) || 0;
+    const productId = row.dataset.productId || '';
     const sumEl = row.querySelector('.inv-sum');
     const sum = qty * price;
     sumEl.textContent = fmt(sum);
     if (name && qty > 0 && price > 0) {
-      items.push({ name, qty, unitPrice: price, sum });
+      items.push({ name, qty, unitPrice: price, sum, productId, valid: !!productId });
     }
   });
   return items;
@@ -1032,13 +1075,14 @@ async function scanForInvoice() {
       addInvoiceRow();
       const rows = document.querySelectorAll('#invoiceItems .inv-row');
       const lastRow = rows[rows.length - 1];
+      const lastId = lastRow.id.replace('inv-row-', '');
       if (result.product) {
         lastRow.querySelector('.inv-name').value = result.product.name;
-        lastRow.querySelector('.inv-price').value = result.product.price;
+        onInvoiceProductInput(lastId);
         lastRow.querySelector('.inv-qty').focus();
         lastRow.querySelector('.inv-qty').select();
       } else {
-        alert("Штрих-код топилмади — товар номини қўлда ёзинг");
+        alert("Штрих-код топилмади. Бу товар аввал 'Товарлар' бўлимида қўшилган бўлиши керак.");
         lastRow.querySelector('.inv-name').focus();
       }
       recalcInvoiceTotal();
@@ -1109,6 +1153,11 @@ async function submitInvoice() {
 
   if (!customerName) { alert('Мижоз номини киритинг'); return; }
   if (items.length === 0) { alert('Камида битта тoвар қатори тўлдирилиши керак'); return; }
+  const invalidItem = items.find(i => !i.valid);
+  if (invalidItem) {
+    alert(`"${invalidItem.name}" рўйхатдаги мавжуд товарлардан танланмаган. Илтимос, таклиф рўйхатидан аниқ товарни танланг.`);
+    return;
+  }
 
   const paidNow = parseFloat(document.getElementById('inv-paidnow').value) || 0;
   const remaining = Math.round((total - paidNow) * 100) / 100;
