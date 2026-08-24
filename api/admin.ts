@@ -138,15 +138,16 @@ export default async function handler(req: any, res: any) {
       }
 
       if (action === "add_product") {
-        const { category, name, price, costPrice, unitsPerPackage, stockQty, lowStockThreshold, imageUrl } = req.body;
+        const { category, name, price, costPrice, unitsPerPackage, unit, stockQty, lowStockThreshold, imageUrl } = req.body;
         const { error } = await supabase.from("products").insert({
           category,
           name,
           price,
           cost_price: costPrice || null,
           units_per_package: unitsPerPackage || null,
+          unit: unit || "dona",
           stock_qty: stockQty || 0,
-          low_stock_threshold: lowStockThreshold || 20,
+          low_stock_threshold: lowStockThreshold ?? 20,
           image_url: imageUrl || null,
           is_active: true,
         });
@@ -156,15 +157,16 @@ export default async function handler(req: any, res: any) {
       }
 
       if (action === "update_product") {
-        const { productId, category, name, price, costPrice, unitsPerPackage, stockQty, lowStockThreshold, imageUrl } = req.body;
+        const { productId, category, name, price, costPrice, unitsPerPackage, unit, stockQty, lowStockThreshold, imageUrl } = req.body;
         const updatePayload: any = {
           category,
           name,
           price,
           cost_price: costPrice || null,
           units_per_package: unitsPerPackage || null,
+          unit: unit || "dona",
           stock_qty: stockQty,
-          low_stock_threshold: lowStockThreshold,
+          low_stock_threshold: lowStockThreshold ?? 20,
         };
         // Rasm faqat yangisi yuborilganda yangilanadi (eskisi saqlanib qolishi uchun)
         if (imageUrl) updatePayload.image_url = imageUrl;
