@@ -290,6 +290,17 @@ export default async function handler(req: any, res: any) {
           return;
         }
 
+        // Har bir qator MAJBURIY ravishda mavjud tovarga bog'langan bo'lishi kerak
+        // (endi erkin nom yozib yangi tovar avtomatik yaratilmaydi)
+        for (const item of items) {
+          if (!item.productId) {
+            res.status(400).json({
+              error: `"${item.name}" ro'yxatdan tanlanmagan. Faqat mavjud tovarlardan tanlang.`,
+            });
+            return;
+          }
+        }
+
         const total = items.reduce(
           (sum: number, i: any) => sum + Number(i.sum ?? i.qty * i.unitPrice),
           0
@@ -336,7 +347,7 @@ export default async function handler(req: any, res: any) {
                 name: customerName,
                 owner_name: customerName,
                 owner_phone: customerPhone || null,
-                debt_limit: 999999999,
+                debt_limit: 0, // Admin keyinroq alohida belgilashi mumkin
                 status: "pending_link", // Telegram'ga hali ulanmagan — admin panelda QR tugmasi chiqishi uchun
               })
               .select()
@@ -346,37 +357,28 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        // 2) Har bir qator uchun tovarni topamiz yoki yaratamiz
-        //    (harflar katta-kichikligiga qaramasdan qidiramiz — dublikat bo'lmasligi uchun)
-        const orderItemsPayload: any[] = [];
-        for (const item of items) {
-          const { data: existingProduct } = await supabase
-            .from("products")
-            .select("id")
-            .ilike("name", item.name.trim())
-            .maybeSingle();
-
-          let productId: string;
-          if (existingProduct) {
-            productId = existingProduct.id;
-          } else {
-            const { data: newProduct, error: prodErr } = await supabase
-              .from("products")
-              .insert({
-                category: item.category || "Bozor",
-                name: item.name,
-                price: item.unitPrice,
-                stock_qty: 999999,
-                low_stock_threshold: 0,
-                is_active: true,
-              })
-              .select()
-              .single();
-            if (prodErr) throw new Error(prodErr.message);
-            productId = newProduct.id;
-          }
-          orderItemsPayload.push({ product_id: productId, qty: item.qty, unit_price: item.unitPrice });
+        // Mijozning joriy qarzi bo'lsa — yangi naklad YOZIB BO'LMAYDI, avval eskisini to'lashi kerak
+        const { data: shopDebtCheck } = await supabase
+          .from("shops")
+          .select("current_debt")
+          .eq("id", shopId)
+          .maybeSingle();
+        if (shopDebtCheck && Number(shopDebtCheck.current_debt) > 0) {
+          res.status(400).json({
+            error: `Мижознинг жорий қарзи бор: ${Number(shopDebtCheck.current_debt).toLocaleString(
+              "ru-RU"
+            )} сўм. Янги наклад ёзишдан олдин аввалги қарзни тўлаши керак.`,
+          });
+          return;
         }
+
+        // 2) order_items uchun to'g'ridan-to'g'ri productId'lardan foydalanamiz
+        //    (tovar qidirish/avtomatik yaratish endi kerak emas — hammasi mavjud katalogdan tanlanadi)
+        const orderItemsPayload = items.map((item: any) => ({
+          product_id: item.productId,
+          qty: item.qty,
+          unit_price: item.unitPrice,
+        }));
 
         // 3) Buyurtma (nakladnoy) yaratamiz — "pending" -> keyin "confirmed"
         //    (trigger'lar shu UPDATE orqali ishga tushadi: qarz qo'shiladi)
