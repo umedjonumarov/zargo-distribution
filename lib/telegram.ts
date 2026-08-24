@@ -1,6 +1,6 @@
 const TG_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 
-export type InlineButton = { text: string; callback_data: string };
+export type InlineButton = { text: string; callback_data?: string; web_app?: { url: string } };
 
 export async function sendMessage(
   chatId: number | string,
