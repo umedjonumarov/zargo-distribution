@@ -50,9 +50,9 @@ export const t = {
       `💰 Ваш текущий долг: ${debt.toLocaleString("ru-RU")} сум\nЛимит: ${limit.toLocaleString("ru-RU")} сум\nОсталось до лимита: ${(limit - debt).toLocaleString("ru-RU")} сум`,
   },
   contactAdmin: {
-    uz: "Администратор: @zargo_admin ёки +992 900 00 00 00",
-    tj: "Администратор: @zargo_admin ё +992 900 00 00 00",
-    ru: "Администратор: @zargo_admin или +992 900 00 00 00",
+    uz: "Администратор:\nTelegram: @umedjon20994\nМуҳаммаджон: +9929318111121\nУмеджон: +992927909698",
+    tj: "Администратор:\nTelegram: @umedjon20994\nМуҳаммадҷон: +9929318111121\nУмеҷон: +992927909698",
+    ru: "Администратор:\nTelegram: @umedjon20994\nМухаммаджон: +9929318111121\nУмеджон: +992927909698",
   },
   noHistory: {
     uz: "Ҳали буюртмаларингиз йўқ.",
