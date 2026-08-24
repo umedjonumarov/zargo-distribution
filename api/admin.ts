@@ -438,9 +438,9 @@ export default async function handler(req: any, res: any) {
         if (shopInfo?.telegram_chat_id) {
           const now = new Date();
           const dateStr =
-            now.toLocaleDateString("ru-RU") +
+            now.toLocaleDateString("ru-RU", { timeZone: "Asia/Dushanbe" }) +
             " " +
-            now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+            now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Dushanbe" });
           const barcodeNum = String(Math.floor(100000000000 + Math.random() * 899999999999));
 
           const receiptText = buildReceiptText({
