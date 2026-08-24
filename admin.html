@@ -145,7 +145,11 @@
   <div class="lock-box">
     <h1>🔒 ZarGo Admin</h1>
     <p>Davom etish uchun parolni kiriting</p>
-    <input type="password" id="pwInput" placeholder="Parol" onkeydown="if(event.key==='Enter') tryLogin()">
+    <input type="password" id="pwInput" placeholder="Parol" autocomplete="new-password" onkeydown="if(event.key==='Enter') tryLogin()">
+    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-soft);margin:-4px 0 10px;justify-content:center;">
+      <input type="checkbox" id="showPwToggle" onchange="document.getElementById('pwInput').type = this.checked ? 'text' : 'password'">
+      Parolni ko'rsatish
+    </label>
     <button onclick="tryLogin()">Kirish</button>
     <div class="lock-error" id="lockError"></div>
   </div>
@@ -260,7 +264,7 @@ const BOT_USERNAME = 'zargoai_bot'; // Agar bot username boshqacha bo'lsa, shu y
 let ADMIN_PASSWORD = '';
 
 function tryLogin() {
-  const pw = document.getElementById('pwInput').value;
+  const pw = document.getElementById('pwInput').value.trim();
   if (!pw) return;
   ADMIN_PASSWORD = pw;
   fetch('/api/admin', { headers: { 'x-admin-password': pw } })
