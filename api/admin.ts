@@ -83,7 +83,7 @@ export default async function handler(req: any, res: any) {
         supabase.from("products").select("*").order("category"),
         supabase
           .from("orders")
-          .select("*, shops(name,owner_name), order_items(qty,unit_price,products(name))")
+          .select("*, shops(name,owner_name), order_items(product_id,qty,unit_price,products(name))")
           .order("created_at", { ascending: false })
           .limit(50),
       ]);
@@ -521,6 +521,16 @@ export default async function handler(req: any, res: any) {
         const wasConfirmed = order.status === "confirmed";
         const oldTotal = Number(order.total_amount);
 
+        // Eski miqdorlarni ESLAB QOLAMIZ (o'chirishdan oldin) — qoldiqni to'g'rilash uchun kerak
+        const { data: oldItemsData } = await supabase
+          .from("order_items")
+          .select("product_id, qty")
+          .eq("order_id", orderId);
+        const oldQtyMap = new Map<string, number>();
+        (oldItemsData || []).forEach((i: any) => {
+          oldQtyMap.set(i.product_id, (oldQtyMap.get(i.product_id) || 0) + Number(i.qty));
+        });
+
         // Eski order_items'larni o'chiramiz, yangilarini qo'shamiz
         await supabase.from("order_items").delete().eq("order_id", orderId);
 
@@ -538,6 +548,34 @@ export default async function handler(req: any, res: any) {
           return { order_id: orderId, product_id: item.productId, qty: item.qty, unit_price: p ? p.price : 0 };
         });
         await supabase.from("order_items").insert(newItemsPayload);
+
+        // Buyurtma AVVAL "confirmed" bo'lgan bo'lsa — tovar qoldig'i allaqachon kamaytirilgan edi.
+        // Endi yangi miqdorlar bilan solishtirib, farqni skladga QAYTARAMIZ (yoki qo'shimcha kamaytiramiz)
+        if (wasConfirmed) {
+          const newQtyMap = new Map<string, number>();
+          items.forEach((i: any) => {
+            newQtyMap.set(i.productId, (newQtyMap.get(i.productId) || 0) + Number(i.qty));
+          });
+          const allProductIds = new Set([...oldQtyMap.keys(), ...newQtyMap.keys()]);
+          for (const productId of allProductIds) {
+            const oldQty = oldQtyMap.get(productId) || 0;
+            const newQty = newQtyMap.get(productId) || 0;
+            const diffQty = newQty - oldQty; // manfiy bo'lsa — tovar KAMAYGAN, demak skladga QAYTARILADI
+            if (diffQty !== 0) {
+              const { data: prod } = await supabase
+                .from("products")
+                .select("stock_qty")
+                .eq("id", productId)
+                .maybeSingle();
+              if (prod) {
+                await supabase
+                  .from("products")
+                  .update({ stock_qty: Number(prod.stock_qty) - diffQty })
+                  .eq("id", productId);
+              }
+            }
+          }
+        }
 
         // total_amount trigger orqali avtomatik qayta hisoblanadi. Agar buyurtma
         // avval "confirmed" bo'lgan bo'lsa, qarz farqini debt_transactions orqali to'g'rilaymiz
