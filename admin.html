@@ -260,14 +260,14 @@
 </div>
 
 <script>
-const BOT_USERNAME = 'zargoaibot'; // Agar bot username boshqacha bo'lsa, shu yerni o'zgartiring
+const BOT_USERNAME = 'zargoai_bot'; // Agar bot username boshqacha bo'lsa, shu yerni o'zgartiring
 let ADMIN_PASSWORD = '';
 
 function tryLogin() {
   const pw = document.getElementById('pwInput').value.trim();
   if (!pw) return;
   ADMIN_PASSWORD = pw;
-  fetch('/api/admin', { headers: { 'x-admin-password': pw } })
+  fetch('/api/admin?_=' + Date.now(), { headers: { 'x-admin-password': pw }, cache: 'no-store' })
     .then(async res => {
       if (!res.ok) throw new Error('wrong');
       const data = await res.json();
@@ -293,9 +293,10 @@ let state = { shops: [], products: [], orders: [] };
 
 async function api(body) {
   const opts = body
-    ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': ADMIN_PASSWORD }, body: JSON.stringify(body) }
-    : { headers: { 'x-admin-password': ADMIN_PASSWORD } };
-  const res = await fetch('/api/admin', opts);
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': ADMIN_PASSWORD }, body: JSON.stringify(body), cache: 'no-store' }
+    : { headers: { 'x-admin-password': ADMIN_PASSWORD }, cache: 'no-store' };
+  const url = body ? '/api/admin' : '/api/admin?_=' + Date.now();
+  const res = await fetch(url, opts);
   if (res.status === 401) {
     sessionStorage.removeItem('zargo_admin_pw');
     document.getElementById('lockScreen').style.display = 'flex';
