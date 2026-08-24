@@ -275,12 +275,13 @@ export default async function handler(req: any, res: any) {
         }
 
         // 2) Har bir qator uchun tovarni topamiz yoki yaratamiz
+        //    (harflar katta-kichikligiga qaramasdan qidiramiz — dublikat bo'lmasligi uchun)
         const orderItemsPayload: any[] = [];
         for (const item of items) {
           const { data: existingProduct } = await supabase
             .from("products")
             .select("id")
-            .eq("name", item.name)
+            .ilike("name", item.name.trim())
             .maybeSingle();
 
           let productId: string;
