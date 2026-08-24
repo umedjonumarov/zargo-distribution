@@ -349,12 +349,12 @@
       <label>Сотиш нархи (1 дона, дўконларга)</label>
       <input id="np-price" type="number" placeholder="34.5" oninput="recalcProductPreview()">
       <label>Ўлчов бирлиги</label>
-      <select id="np-unit" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;margin-bottom:8px;">
-        <option value="dona">дона</option>
+      <select id="np-unit" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;margin-bottom:8px;" onchange="recalcProductPreview()">
+        <option value="dona">дона (нарх — ҳар донага)</option>
         <option value="kg">кг</option>
         <option value="litr">литр</option>
-        <option value="quti">қути</option>
-        <option value="pachka">пачка</option>
+        <option value="quti">қути/короб (нарх — бутун қутига)</option>
+        <option value="pachka">пачка (нарх — бутун пачкага)</option>
       </select>
       <label>Бошланғич қолдиқ (ҳозир омборда неча бор)</label>
       <input id="np-stock" type="number" placeholder="200">
@@ -363,7 +363,7 @@
       <div style="font-size:10.5px;color:var(--ink-soft);margin:-4px 0 8px;">Қолдиқ шу сондан кам бўлса, дашбордда "камайган" деб кўрсатилади</div>
 
       <div class="card" style="background:var(--cream);margin:4px 0 10px;" id="productPreview">
-        <div class="card-meta">Упаковка нархи: <b id="pv-package">0</b> · Фойда (1 дона): <b id="pv-margin">0</b></div>
+        <div class="card-meta"><span id="pv-package-label">Упаковка нархи</span>: <b id="pv-package">0</b> · Фойда: <b id="pv-margin">0</b></div>
       </div>
 
       <button class="btn btn-add" onclick="submitProduct()">Сақлаш</button>
@@ -899,8 +899,21 @@ function recalcProductPreview() {
   const cost = parseFloat(document.getElementById('np-cost').value) || 0;
   const units = parseFloat(document.getElementById('np-units').value) || 0;
   const price = parseFloat(document.getElementById('np-price').value) || 0;
-  document.getElementById('pv-package').textContent = fmt(cost * units);
-  document.getElementById('pv-margin').textContent = fmt(price - cost);
+  const unit = document.getElementById('np-unit').value;
+  const margin = price - cost;
+
+  // "dona" bo'lsa — narxlar HAR BIR DONAGA tegishli, shuning uchun butun
+  // qutining narxini ko'rsatish foydali (cost * units_per_package).
+  // "quti/pachka/karobka" bo'lsa — narxlar ALLAQACHON butun quti/pachka uchun,
+  // shuning uchun yana units'ga ko'paytirish XATO bo'ladi (ikki marta hisoblanadi)
+  if (unit === 'dona') {
+    document.getElementById('pv-package').textContent = fmt(cost * units);
+    document.getElementById('pv-package-label').textContent = 'Упаковка нархи (тахминий)';
+  } else {
+    document.getElementById('pv-package').textContent = units ? `${units} дона (маълумот учун)` : '—';
+    document.getElementById('pv-package-label').textContent = 'Ичида';
+  }
+  document.getElementById('pv-margin').textContent = fmt(margin) + ` (1 ${unitLabel(unit)}га)`;
 }
 
 document.getElementById('np-image-file').addEventListener('change', function (e) {
