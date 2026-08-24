@@ -168,6 +168,14 @@ export const t = {
     ru: (amount: number) =>
       `⏰ Напоминание: сегодня день оплаты вашего долга.\n\nСумма: ${amount.toLocaleString("ru-RU")} сум\n\nПожалуйста, свяжитесь с администратором для оплаты.`,
   },
+  orderDelivered: {
+    uz: (orderId: string, method: string) =>
+      `🚚 Буюртмангиз (№${orderId.slice(0, 8)}) етказиб берилди!\n\nТўлов тури: ${method}\n\nРаҳмат!`,
+    tj: (orderId: string, method: string) =>
+      `🚚 Фармоиши шумо (№${orderId.slice(0, 8)}) расонида шуд!\n\nНавъи пардохт: ${method}\n\nРаҳмат!`,
+    ru: (orderId: string, method: string) =>
+      `🚚 Ваш заказ (№${orderId.slice(0, 8)}) доставлен!\n\nСпособ оплаты: ${method}\n\nСпасибо!`,
+  },
 };
 
 export const langLabel: Record<Lang, string> = {
