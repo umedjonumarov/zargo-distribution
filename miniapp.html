@@ -521,12 +521,21 @@ async function checkout() {
     const successSub = document.getElementById('successSub');
     const successDetail = document.getElementById('successDetail');
 
-    successTitle.textContent = 'Буюртма қабул қилинди!';
-    successSub.textContent = 'Администратор кўриб чиқиб, тез орада тасдиқлайди';
-    successDetail.innerHTML = `
-      <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)} сўм</span></div>
-      <div class="success-detail-row"><span>Ҳолат</span><span>⏳ Кўриб чиқилмоқда</span></div>
-    `;
+    if (result.willExceedLimit) {
+      successTitle.textContent = 'Буюртма қабул қилинди';
+      successSub.textContent = 'Лимитдан ошгани учун администратор тасдиқлашини кутинг';
+      successDetail.innerHTML = `
+        <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)} сўм</span></div>
+        <div class="success-detail-row"><span>Ҳолат</span><span>⏳ Кутмоқда</span></div>
+      `;
+    } else {
+      successTitle.textContent = 'Буюртма қабул қилинди!';
+      successSub.textContent = 'Раҳмат, тез орада етказиб берамиз';
+      successDetail.innerHTML = `
+        <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)} сўм</span></div>
+        <div class="success-detail-row"><span>Янги қарз</span><span>${fmt(result.newDebt)} сўм</span></div>
+      `;
+    }
 
     document.getElementById('successOverlay').classList.add('show');
     if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
