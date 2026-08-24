@@ -19,7 +19,22 @@ export default async function handler(req: any, res: any) {
 
   // CORS emas — bir domendan (admin.html shu Vercel loyihasida) ishlatiladi
   if (!checkPassword(req)) {
-    res.status(401).json({ error: "Noto'g'ri parol" });
+    // VAQTINCHA DEBUG: parolning o'zini emas, faqat uzunligini ko'rsatamiz —
+    // muammoni topgach shu qismni olib tashlaymiz
+    const provided = (
+      req.headers["x-admin-password"] || req.query?.password || req.body?.password || ""
+    )
+      .toString()
+      .trim();
+    const expected = (process.env.ADMIN_PASSWORD || "").trim();
+    res.status(401).json({
+      error: "Noto'g'ri parol",
+      debug: {
+        providedLength: provided.length,
+        expectedLength: expected.length,
+        envVarExists: !!process.env.ADMIN_PASSWORD,
+      },
+    });
     return;
   }
 
