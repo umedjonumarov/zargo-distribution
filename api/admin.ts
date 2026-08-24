@@ -12,6 +12,59 @@ function checkPassword(req: any): boolean {
   return provided.length > 0 && provided === expected;
 }
 
+// Chekni chop etilgan qog'ozga o'xshatib, chiroyli formatlab tuzadi (Telegram HTML)
+function buildReceiptText(params: {
+  items: any[];
+  total: number;
+  customerName: string;
+  customerPhone?: string;
+  dateStr: string;
+  paidNow?: number;
+  remaining?: number;
+  dueDate?: string | null;
+  barcodeNum: string;
+}): string {
+  const { items, total, customerName, customerPhone, dateStr, paidNow, remaining, dueDate, barcodeNum } = params;
+
+  const nameWidth = 16;
+  const itemLines = items
+    .map((i: any) => {
+      const sum = Number(i.sum ?? i.qty * i.unitPrice);
+      const name = String(i.name).length > nameWidth ? String(i.name).slice(0, nameWidth - 1) + "…" : String(i.name).padEnd(nameWidth, " ");
+      const qtyPart = `× ${i.qty}`.padEnd(6, " ");
+      const sumPart = sum.toLocaleString("ru-RU").padStart(9, " ");
+      return `${name}${qtyPart}${sumPart}`;
+    })
+    .join("\n");
+
+  const dashLine = "─".repeat(28);
+
+  let statusLine = "✅ <b>Тўлиқ тўланди</b>";
+  if (remaining && remaining > 0) {
+    statusLine = `💵 Тўланди: ${(paidNow ?? 0).toLocaleString("ru-RU")} сўм\n⚠️ <b>Қарз қолдиғи: ${remaining.toLocaleString(
+      "ru-RU"
+    )} сўм</b>\n📅 Қайтариш санаси: ${dueDate}`;
+  }
+
+  return [
+    `⭐ <b>ZARGO</b>`,
+    `<i>Наклад / чек</i>`,
+    dashLine,
+    `<code>${itemLines}</code>`,
+    dashLine,
+    `<b>ЖАМИ: ${total.toLocaleString("ru-RU")} сўм</b>`,
+    statusLine,
+    ``,
+    `Мижоз: ${customerName}`,
+    customerPhone ? `Тел: ${customerPhone}` : null,
+    `Сана: ${dateStr}`,
+    ``,
+    `<code>${barcodeNum}</code>`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export default async function handler(req: any, res: any) {
   // Muhim: bu javob HECH QACHON keshlanmasligi kerak, aks holda
   // eski "noto'g'ri parol" javobi barcha keyingi urinishlarga qaytarilib qoladi
@@ -381,15 +434,25 @@ export default async function handler(req: any, res: any) {
           .maybeSingle();
 
         if (shopInfo?.telegram_chat_id) {
-          const itemsText = items
-            .map((i: any) => `${i.name} × ${i.qty} = ${Number(i.sum ?? i.qty * i.unitPrice).toLocaleString("ru-RU")}`)
-            .join("\n");
-          let receiptText = `🧾 <b>ZarGo — Наклад / чек</b>\n\n${itemsText}\n\n<b>ЖАМИ: ${total.toLocaleString("ru-RU")} сўм</b>`;
-          if (remaining > 0) {
-            receiptText += `\n\nТўланди: ${paidNowNum.toLocaleString("ru-RU")} сўм\nҚарз қолдиғи: ${remaining.toLocaleString(
-              "ru-RU"
-            )} сўм\nҚайтариш санаси: ${dueDate}`;
-          }
+          const now = new Date();
+          const dateStr =
+            now.toLocaleDateString("ru-RU") +
+            " " +
+            now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+          const barcodeNum = String(Math.floor(100000000000 + Math.random() * 899999999999));
+
+          const receiptText = buildReceiptText({
+            items,
+            total,
+            customerName,
+            customerPhone,
+            dateStr,
+            paidNow: paidNowNum,
+            remaining,
+            dueDate,
+            barcodeNum,
+          });
+
           const tgResult = await sendMessage(shopInfo.telegram_chat_id, receiptText);
           if (tgResult?.ok) {
             sentViaTelegram = true;
