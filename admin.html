@@ -240,8 +240,23 @@
   <div class="view" id="view-products">
     <div class="section-label">
       <span>Товарлар</span>
-      <button class="add-toggle" onclick="openProductForm()">+ Янги товар</button>
+      <div style="display:flex;gap:6px;">
+        <button class="add-toggle" onclick="toggleForm('restockForm')">📦 Кirim</button>
+        <button class="add-toggle" onclick="openProductForm()">+ Янги товар</button>
+      </div>
     </div>
+
+    <div class="add-form" id="restockForm">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px;">📦 Мавжуд товарга кirim қўшиш</div>
+      <label>Товарни танланг</label>
+      <select id="rs-product" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;margin-bottom:8px;"></select>
+      <label>Неча дона келди</label>
+      <input id="rs-qty" type="number" placeholder="Масалан: 500">
+      <label>Янги келиш нархи (ихтиёрий, ўзгарган бўлса)</label>
+      <input id="rs-cost" type="number" placeholder="Масалан: 32.5">
+      <button class="btn btn-add" onclick="submitRestock()">Кирим қилиш</button>
+    </div>
+
     <div class="add-form" id="addProductForm">
       <div id="productFormTitle" style="font-weight:700;font-size:13px;margin-bottom:8px;">Янги товар</div>
       <label>Категория</label>
@@ -361,6 +376,10 @@ function applyData(data) {
   const namesList = document.getElementById('shopNamesList');
   if (namesList) {
     namesList.innerHTML = state.shops.map(s => `<option value="${s.name}">`).join('');
+  }
+  const rsSelect = document.getElementById('rs-product');
+  if (rsSelect) {
+    rsSelect.innerHTML = state.products.map(p => `<option value="${p.id}">${p.name} (${p.category}) — ҳозир: ${p.stock_qty} дона</option>`).join('');
   }
   const now = new Date();
   document.getElementById('lastUpdated').textContent =
@@ -578,6 +597,23 @@ async function submitAddShop() {
     if (result.shop) {
       showQrModal(result.shop.id, result.shop.name);
     }
+  } catch (e) { alert('Хатолик: ' + e.message); }
+}
+
+async function submitRestock() {
+  const productId = document.getElementById('rs-product').value;
+  const qty = parseInt(document.getElementById('rs-qty').value);
+  const newCost = parseFloat(document.getElementById('rs-cost').value) || null;
+
+  if (!productId) { alert('Товарни танланг'); return; }
+  if (!qty || qty <= 0) { alert('Тўғри миқдор киритинг'); return; }
+
+  try {
+    await api({ action: 'restock_product', productId, qtyReceived: qty, newCostPrice: newCost });
+    document.getElementById('rs-qty').value = '';
+    document.getElementById('rs-cost').value = '';
+    toggleForm('restockForm');
+    await loadAll();
   } catch (e) { alert('Хатолик: ' + e.message); }
 }
 
