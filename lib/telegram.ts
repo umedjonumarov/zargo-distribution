@@ -20,10 +20,11 @@ export async function sendMessage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    console.error("sendMessage xato:", await res.text());
+  const result = await res.json();
+  if (!res.ok || !result.ok) {
+    console.error("sendMessage xato:", JSON.stringify(result));
   }
-  return res.json();
+  return result; // { ok: true/false, ... } — chaqiruvchi haqiqiy natijani tekshira oladi
 }
 
 export async function sendPhoto(
