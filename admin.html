@@ -670,11 +670,12 @@ function renderOrderCard(o) {
   const ownerName = o.shops ? o.shops.owner_name : '';
   const itemsList = (o.order_items || []);
   const itemsText = itemsList.map(i => `${i.products ? i.products.name : '?'} × ${i.qty}`).join(', ');
-  const statusTag = o.status === 'pending' ? '<span class="tag pending">Кутмоқда</span>'
-    : o.status === 'confirmed' ? '<span class="tag ok">Тасдиқланган</span>'
-    : o.status === 'delivered' ? '<span class="tag ok">Етказилган</span>'
+  const statusTag = o.status === 'pending' ? '<span class="tag pending">Тасдиқ кутмоқда</span>'
+    : o.status === 'confirmed' ? '<span class="tag pending">🚚 Етказиш кутмоқда</span>'
+    : o.status === 'delivered' ? '<span class="tag ok">✅ Етказилган</span>'
     : '<span class="tag neutral">Бекор қилинган</span>';
   const dateStr = new Date(o.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dushanbe' });
+  const shortId = o.id.slice(0, 8);
 
   let html = `
     <div class="card">
@@ -692,9 +693,62 @@ function renderOrderCard(o) {
   if (o.status === 'pending') {
     html += `<button class="btn btn-confirm" style="flex:1;" onclick="confirmOrder('${o.id}')">✅ Тасдиқлаш</button>`;
   }
-  html += `<button class="btn" style="flex:1;background:none;border:1px solid var(--line);color:var(--teal-800);" onclick='openEditOrder(${JSON.stringify({ id: o.id, shopName, items: itemsList.map(i => ({ productId: i.products ? i.product_id : null, name: i.products ? i.products.name : '?', qty: i.qty })) }).replace(/'/g, "&apos;")})'>✏️ Таҳрирлаш</button>`;
-  html += `</div></div>`;
+  html += `<button class="btn" style="flex:1;background:none;border:1px solid var(--line);color:var(--teal-800);" onclick='openEditOrder(${JSON.stringify({ id: o.id, shopName, items: itemsList.map(i => ({ productId: i.product_id, name: i.products ? i.products.name : '?', qty: i.qty })) }).replace(/'/g, "&apos;")})'>✏️ Таҳрирлаш</button>`;
+  html += `</div>`;
+
+  if (o.status === 'confirmed') {
+    html += `
+      <div style="margin-top:8px;">
+        <button class="btn" style="width:100%;background:var(--green);color:#fff;" onclick="toggleDeliveryPanel('${shortId}')">🚚 Етказилди деб белгилаш</button>
+        <div id="delivery-panel-${shortId}" style="display:none;margin-top:8px;background:var(--cream);border-radius:10px;padding:10px;">
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:6px;">Тўлов тури:</div>
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <button class="pay-method-btn" onclick="markDelivered('${o.id}','cash', ${o.total_amount}, 0)" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:11.5px;font-weight:600;">💵 Нақд</button>
+            <button class="pay-method-btn" onclick="markDelivered('${o.id}','card', 0, ${o.total_amount})" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:11.5px;font-weight:600;">💳 Карта</button>
+            <button class="pay-method-btn" onclick="toggleMixedDelivery('${shortId}')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:11.5px;font-weight:600;">🔀 Аралаш</button>
+          </div>
+          <div id="mixed-delivery-${shortId}" style="display:none;">
+            <div style="display:flex;gap:6px;margin-bottom:6px;">
+              <input type="number" id="dm-cash-${shortId}" placeholder="Нақд" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:12px;">
+              <input type="number" id="dm-card-${shortId}" placeholder="Карта" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:12px;">
+            </div>
+            <button class="btn btn-pay" style="width:100%;" onclick="markDeliveredMixed('${o.id}','${shortId}', ${o.total_amount})">Тасдиқлаш</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  html += `</div>`;
   return html;
+}
+
+function toggleDeliveryPanel(shortId) {
+  const el = document.getElementById('delivery-panel-' + shortId);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleMixedDelivery(shortId) {
+  const el = document.getElementById('mixed-delivery-' + shortId);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function markDelivered(orderId, paymentMethod, cashAmount, cardAmount) {
+  if (!confirm('Буюртма етказилди деб белгилансинми?')) return;
+  try {
+    await api({ action: 'mark_delivered', orderId, paymentMethod, cashAmount, cardAmount });
+    await loadAll();
+  } catch (e) { alert('Хатолик: ' + e.message); }
+}
+
+async function markDeliveredMixed(orderId, shortId, total) {
+  const cash = parseFloat(document.getElementById('dm-cash-' + shortId).value) || 0;
+  const card = parseFloat(document.getElementById('dm-card-' + shortId).value) || 0;
+  if (cash + card !== Number(total)) {
+    alert(`Нақд + Карта = ${fmt(cash + card)}, лекин жами сумма = ${fmt(total)}. Тенг бўлиши керак!`);
+    return;
+  }
+  await markDelivered(orderId, 'mixed', cash, card);
 }
 
 function renderOrders() {
@@ -702,7 +756,33 @@ function renderOrders() {
     document.getElementById('ordersContent').innerHTML = `<div class="empty-state">Ҳали буюртма йўқ</div>`;
     return;
   }
-  document.getElementById('ordersContent').innerHTML = state.orders.map(renderOrderCard).join('');
+
+  const pendingApproval = state.orders.filter(o => o.status === 'pending');
+  const awaitingDelivery = state.orders.filter(o => o.status === 'confirmed');
+  const history = state.orders.filter(o => o.status === 'delivered' || o.status === 'cancelled');
+
+  let html = '';
+
+  if (pendingApproval.length > 0) {
+    html += `<div class="section-label"><span>⏳ Тасдиқ кутаётган буюртмалар</span></div>`;
+    html += pendingApproval.map(renderOrderCard).join('');
+  }
+
+  if (awaitingDelivery.length > 0) {
+    html += `<div class="section-label"><span>🚚 Етказиш кутаётган буюртмалар</span></div>`;
+    html += awaitingDelivery.map(renderOrderCard).join('');
+  }
+
+  if (history.length > 0) {
+    html += `<div class="section-label"><span>📜 Тарих</span></div>`;
+    html += history.map(renderOrderCard).join('');
+  }
+
+  if (pendingApproval.length === 0 && awaitingDelivery.length === 0 && history.length === 0) {
+    html = `<div class="empty-state">Ҳали буюртма йўқ</div>`;
+  }
+
+  document.getElementById('ordersContent').innerHTML = html;
 }
 
 function unitLabel(unit) {
