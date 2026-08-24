@@ -96,6 +96,7 @@
   .add-form.open{display:block;}
   .add-form input,.add-form select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;margin-bottom:8px;}
   .add-form label{font-size:11px;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:3px;}
+  .pay-method-btn.active{background:var(--amber);color:#fff;border-color:var(--amber);}
 
   .qr-overlay{position:fixed;inset:0;background:rgba(15,61,62,.75);display:none;align-items:center;justify-content:center;z-index:90;padding:20px;}
   .qr-overlay.open{display:flex;}
@@ -209,6 +210,35 @@
         <span id="invoiceTotal" style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;">0 сўм</span>
       </div>
     </div>
+
+    <div class="section-label"><span>Тўлов</span></div>
+    <div class="card">
+      <label style="font-size:11px;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:3px;">Ҳозир тўланган сумма</label>
+      <input id="inv-paidnow" type="number" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;margin-bottom:10px;" oninput="onPaidNowChange()">
+
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button type="button" class="pay-method-btn" data-method="cash" onclick="selectPaymentMethod('cash')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:12px;font-weight:600;cursor:pointer;">💵 Нақд</button>
+        <button type="button" class="pay-method-btn" data-method="card" onclick="selectPaymentMethod('card')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:12px;font-weight:600;cursor:pointer;">💳 Карта</button>
+        <button type="button" class="pay-method-btn" data-method="mixed" onclick="selectPaymentMethod('mixed')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--line);background:var(--cream-card);font-size:12px;font-weight:600;cursor:pointer;">🔀 Аралаш</button>
+      </div>
+
+      <div id="mixedPaymentFields" style="display:none;margin-bottom:8px;">
+        <label style="font-size:11px;color:var(--ink-soft);font-weight:600;">Нақд қисми</label>
+        <input id="inv-cash" type="number" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:12.5px;font-family:inherit;margin-bottom:6px;" oninput="validateMixedPayment()">
+        <label style="font-size:11px;color:var(--ink-soft);font-weight:600;">Карта қисми</label>
+        <input id="inv-card" type="number" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:12.5px;font-family:inherit;" oninput="validateMixedPayment()">
+        <div id="mixedPaymentError" style="font-size:11px;color:var(--red);margin-top:4px;"></div>
+      </div>
+
+      <div id="debtSection" style="display:none;">
+        <div class="card" style="background:#FBE4E1;border-color:#F0BDB6;margin-top:8px;">
+          <div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:6px;">⚠️ Қарз қолдиғи: <span id="debtRemaining">0</span> сўм</div>
+          <label style="font-size:11px;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:3px;">Қарзни қайтариш санаси (мажбурий)</label>
+          <input id="inv-duedate" type="date" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:12.5px;font-family:inherit;">
+        </div>
+      </div>
+    </div>
+
     <button class="btn btn-add" style="margin-top:10px;" onclick="submitInvoice()">💾 Сақлаш</button>
 
     <div id="invoiceResult"></div>
@@ -822,11 +852,62 @@ function getInvoiceRows() {
   return items;
 }
 
+let selectedPaymentMethod = null;
+
 function recalcInvoiceTotal() {
   const items = getInvoiceRows();
   const total = items.reduce((s, i) => s + i.sum, 0);
   document.getElementById('invoiceTotal').textContent = fmt(total) + ' сўм';
+  // Standart holatda "hozir to'langan summa" = jami (to'liq to'langan deb faraz qilamiz)
+  const paidInput = document.getElementById('inv-paidnow');
+  if (paidInput && !paidInput.dataset.touched) {
+    paidInput.value = total || '';
+  }
+  onPaidNowChange();
   return { items, total };
+}
+
+function selectPaymentMethod(method) {
+  selectedPaymentMethod = method;
+  document.querySelectorAll('.pay-method-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.pay-method-btn[data-method="${method}"]`).classList.add('active');
+  document.getElementById('mixedPaymentFields').style.display = method === 'mixed' ? 'block' : 'none';
+  if (method !== 'mixed') {
+    document.getElementById('inv-cash').value = '';
+    document.getElementById('inv-card').value = '';
+    document.getElementById('mixedPaymentError').textContent = '';
+  }
+}
+
+function validateMixedPayment() {
+  const paidNow = parseFloat(document.getElementById('inv-paidnow').value) || 0;
+  const cash = parseFloat(document.getElementById('inv-cash').value) || 0;
+  const card = parseFloat(document.getElementById('inv-card').value) || 0;
+  const errEl = document.getElementById('mixedPaymentError');
+  if (cash + card !== paidNow && (cash > 0 || card > 0)) {
+    errEl.textContent = `Нақд + Карта = ${fmt(cash + card)}, лекин тўланган сумма = ${fmt(paidNow)}. Тенг бўлиши керак!`;
+  } else {
+    errEl.textContent = '';
+  }
+}
+
+function onPaidNowChange() {
+  document.getElementById('inv-paidnow').dataset.touched = '1';
+  const { total } = (() => {
+    const items = getInvoiceRows();
+    return { total: items.reduce((s, i) => s + i.sum, 0) };
+  })();
+  const paidNow = parseFloat(document.getElementById('inv-paidnow').value) || 0;
+  const remaining = Math.round((total - paidNow) * 100) / 100;
+
+  const debtSection = document.getElementById('debtSection');
+  if (remaining > 0) {
+    debtSection.style.display = 'block';
+    document.getElementById('debtRemaining').textContent = fmt(remaining);
+  } else {
+    debtSection.style.display = 'none';
+  }
+  validateMixedPayment();
 }
 
 async function submitInvoice() {
@@ -836,6 +917,29 @@ async function submitInvoice() {
 
   if (!customerName) { alert('Мижоз номини киритинг'); return; }
   if (items.length === 0) { alert('Камида битта тoвар қатори тўлдирилиши керак'); return; }
+
+  const paidNow = parseFloat(document.getElementById('inv-paidnow').value) || 0;
+  const remaining = Math.round((total - paidNow) * 100) / 100;
+
+  // ТЎЛОВ ВАЛИДАЦИЯСИ — foydalanuvchi qat'iy talab qilgan qoidalar:
+  if (paidNow > 0 && !selectedPaymentMethod) {
+    alert('Тўлов турини танланг (Нақд / Карта / Аралаш)');
+    return;
+  }
+  const cash = parseFloat(document.getElementById('inv-cash').value) || 0;
+  const card = parseFloat(document.getElementById('inv-card').value) || 0;
+  if (selectedPaymentMethod === 'mixed' && (cash + card !== paidNow)) {
+    alert('Аралаш тўловда Нақд + Карта суммаси тўланган summaga teng bo\'lishi kerak');
+    return;
+  }
+  let dueDate = null;
+  if (remaining > 0) {
+    dueDate = document.getElementById('inv-duedate').value;
+    if (!dueDate) {
+      alert('Қарз қолдиғи бор — қайтариш санасини киритмасдан наkladnoyni saqlab bo\'lmaydi');
+      return;
+    }
+  }
 
   // 1) Avval "chop etilmoqda" holatini ko'rsatamiz
   const resultEl = document.getElementById('invoiceResult');
@@ -851,7 +955,11 @@ async function submitInvoice() {
   `;
 
   try {
-    const invoiceResult = await api({ action: 'create_manual_invoice', customerName, customerPhone, items });
+    const invoiceResult = await api({
+      action: 'create_manual_invoice',
+      customerName, customerPhone, items,
+      paidNow, paymentMethod: selectedPaymentMethod, cashAmount: cash, cardAmount: card, dueDate,
+    });
 
     // 2) Bir oz kutamiz (chop etish hissi uchun), keyin chekni "chiqaramiz"
     await new Promise(r => setTimeout(r, 700));
@@ -877,6 +985,11 @@ async function submitInvoice() {
         ${itemsHtml}
         <div class="receipt-dashed"></div>
         <div class="receipt-total-row"><span>ЖАМИ</span><span>${fmt(total)} сўм</span></div>
+        ${remaining > 0 ? `
+          <div class="receipt-line"><span>Тўланди</span><span>${fmt(paidNow)}</span></div>
+          <div class="receipt-line" style="color:var(--red);font-weight:700;"><span>Қарз қолдиғи</span><span>${fmt(remaining)}</span></div>
+          <div class="receipt-line"><span>Қайтариш санаси</span><span>${dueDate}</span></div>
+        ` : `<div class="receipt-line" style="color:var(--green);"><span>Тўлиқ тўланди</span><span>✅</span></div>`}
         <div class="receipt-meta">
           Мижоз: ${customerName}<br>
           ${customerPhone ? 'Тел: ' + customerPhone + '<br>' : ''}
@@ -919,6 +1032,15 @@ async function submitInvoice() {
     document.getElementById('inv-phone').value = '';
     document.getElementById('invoiceItems').innerHTML = '';
     document.getElementById('invoiceTotal').textContent = '0 сўм';
+    document.getElementById('inv-paidnow').value = '';
+    document.getElementById('inv-paidnow').dataset.touched = '';
+    document.getElementById('inv-cash').value = '';
+    document.getElementById('inv-card').value = '';
+    document.getElementById('inv-duedate').value = '';
+    document.getElementById('debtSection').style.display = 'none';
+    document.querySelectorAll('.pay-method-btn').forEach(b => b.classList.remove('active'));
+    selectedPaymentMethod = null;
+    addInvoiceRow();
 
     await loadAll();
   } catch (e) {
