@@ -138,6 +138,11 @@
   .receipt-meta{font-size:10px;color:#666;margin-top:10px;line-height:1.6;}
   .receipt-barcode{height:38px;margin:14px 0 4px;background:repeating-linear-gradient(90deg,#111 0 2px,transparent 2px 3px,#111 3px 5px,transparent 5px 6px,#111 6px 9px,transparent 9px 11px,#111 11px 12px,transparent 12px 14px);}
   .receipt-barcode-num{text-align:center;font-size:9px;letter-spacing:2px;color:#444;}
+
+  /* Raqam maydonlaridagi yuqori/pastga strelkalarni butunlay olib tashlaymiz */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+  input[type=number]{-moz-appearance:textfield;appearance:textfield;}
 </style>
 </head>
 <body>
@@ -311,8 +316,19 @@
       <input id="np-units" type="number" placeholder="12" oninput="recalcProductPreview()">
       <label>Сотиш нархи (1 дона, дўконларга)</label>
       <input id="np-price" type="number" placeholder="34.5" oninput="recalcProductPreview()">
-      <label>Бошланғич қолдиқ (дона)</label>
+      <label>Ўлчов бирлиги</label>
+      <select id="np-unit" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;margin-bottom:8px;">
+        <option value="dona">дона</option>
+        <option value="kg">кг</option>
+        <option value="litr">литр</option>
+        <option value="quti">қути</option>
+        <option value="pachka">пачка</option>
+      </select>
+      <label>Бошланғич қолдиқ (ҳозир омборда неча бор)</label>
       <input id="np-stock" type="number" placeholder="200">
+      <label>Кам қолди — огоҳлантириш чегараси</label>
+      <input id="np-lowstock" type="number" placeholder="20">
+      <div style="font-size:10.5px;color:var(--ink-soft);margin:-4px 0 8px;">Қолдиқ шу сондан кам бўлса, дашбордда "камайган" деб кўрсатилади</div>
 
       <div class="card" style="background:var(--cream);margin:4px 0 10px;" id="productPreview">
         <div class="card-meta">Упаковка нархи: <b id="pv-package">0</b> · Фойда (1 дона): <b id="pv-margin">0</b></div>
@@ -415,7 +431,7 @@ function applyData(data) {
   const rsList = document.getElementById('productNamesList');
   if (rsList) {
     rsList.innerHTML = state.products.map(p =>
-      `<option value="${p.name} — ${p.category} (ҳозир: ${p.stock_qty} дона)" data-id="${p.id}">`
+      `<option value="${p.name} — ${p.category} (ҳозир: ${p.stock_qty} ${unitLabel(p.unit)})" data-id="${p.id}">`
     ).join('');
   }
   const now = new Date();
@@ -567,6 +583,10 @@ function renderOrders() {
   document.getElementById('ordersContent').innerHTML = state.orders.map(renderOrderCard).join('');
 }
 
+function unitLabel(unit) {
+  return { dona: 'дона', kg: 'кг', litr: 'литр', quti: 'қути', pachka: 'пачка' }[unit] || 'дона';
+}
+
 function renderProducts() {
   if (state.products.length === 0) {
     document.getElementById('productsContent').innerHTML = `<div class="empty-state">Ҳали товар қўшилмаган</div>`;
@@ -587,7 +607,7 @@ function renderProducts() {
               <div class="card-meta">${p.category} · сотиш: ${fmt(p.price)}${margin !== null ? ' · фойда: ' + fmt(margin) : ''}</div>
             </div>
           </div>
-          <div class="amount ${isLow ? 'high' : ''}">${p.stock_qty} дона</div>
+          <div class="amount ${isLow ? 'high' : ''}">${p.stock_qty} ${unitLabel(p.unit)}</div>
         </div>
         <div class="stock-bar"><div class="stock-fill" style="width:${pct}%;background:${isLow ? 'var(--red)' : 'var(--green)'};"></div></div>
         <button class="btn" style="margin-top:8px;width:100%;background:none;border:1px solid var(--line);color:var(--teal-800);" onclick='openProductForm(${JSON.stringify(p).replace(/'/g, "&apos;")})'>✏️ Таҳрирлаш</button>
@@ -645,7 +665,7 @@ function onRestockProductInput() {
   const hiddenId = document.getElementById('rs-product');
 
   const match = state.products.find(p =>
-    `${p.name} — ${p.category} (ҳозир: ${p.stock_qty} дона)` === typed
+    `${p.name} — ${p.category} (ҳозир: ${p.stock_qty} ${unitLabel(p.unit)})` === typed
   );
 
   if (match) {
@@ -712,7 +732,9 @@ function openProductForm(product) {
     document.getElementById('np-cost').value = product.cost_price || '';
     document.getElementById('np-units').value = product.units_per_package || '';
     document.getElementById('np-price').value = product.price || '';
+    document.getElementById('np-unit').value = product.unit || 'dona';
     document.getElementById('np-stock').value = product.stock_qty || 0;
+    document.getElementById('np-lowstock').value = product.low_stock_threshold ?? 20;
     const preview = document.getElementById('np-image-preview');
     if (product.image_url) {
       preview.src = product.image_url;
@@ -728,7 +750,9 @@ function openProductForm(product) {
     document.getElementById('np-cost').value = '';
     document.getElementById('np-units').value = '';
     document.getElementById('np-price').value = '';
+    document.getElementById('np-unit').value = 'dona';
     document.getElementById('np-stock').value = '';
+    document.getElementById('np-lowstock').value = 20;
     document.getElementById('np-image-preview').style.display = 'none';
   }
   recalcProductPreview();
@@ -770,7 +794,9 @@ async function submitProduct() {
   const price = parseFloat(document.getElementById('np-price').value);
   const costPrice = parseFloat(document.getElementById('np-cost').value) || null;
   const unitsPerPackage = parseInt(document.getElementById('np-units').value) || null;
+  const unit = document.getElementById('np-unit').value;
   const stockQty = parseInt(document.getElementById('np-stock').value) || 0;
+  const lowStockThreshold = parseInt(document.getElementById('np-lowstock').value);
 
   if (!category || !name || !price) { alert('Категория, номи ва сотиш нархини киритинг'); return; }
 
@@ -790,15 +816,15 @@ async function submitProduct() {
       await api({
         action: 'update_product',
         productId: editingProductId,
-        category, name, price, costPrice, unitsPerPackage, stockQty,
-        lowStockThreshold: 20,
+        category, name, price, costPrice, unitsPerPackage, unit, stockQty,
+        lowStockThreshold: isNaN(lowStockThreshold) ? 20 : lowStockThreshold,
         imageUrl,
       });
     } else {
       await api({
         action: 'add_product',
-        category, name, price, costPrice, unitsPerPackage, stockQty,
-        lowStockThreshold: 20,
+        category, name, price, costPrice, unitsPerPackage, unit, stockQty,
+        lowStockThreshold: isNaN(lowStockThreshold) ? 20 : lowStockThreshold,
         imageUrl,
       });
     }
