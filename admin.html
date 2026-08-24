@@ -851,7 +851,7 @@ async function submitInvoice() {
   `;
 
   try {
-    await api({ action: 'create_manual_invoice', customerName, customerPhone, items });
+    const invoiceResult = await api({ action: 'create_manual_invoice', customerName, customerPhone, items });
 
     // 2) Bir oz kutamiz (chop etish hissi uchun), keyin chekni "chiqaramiz"
     await new Promise(r => setTimeout(r, 700));
@@ -893,6 +893,26 @@ async function submitInvoice() {
         document.getElementById('receiptWrap').classList.add('show');
       }, 100);
     });
+
+    // Ulashish tugmalari — Telegram avtomatik yuborilgan bo'lsa xabar beramiz,
+    // aks holda WhatsApp / nusxa olish variantlarini taklif qilamiz
+    const shareText = `ZarGo — Наклад\n\n${items.map(i => `${i.name} × ${i.qty} = ${fmt(i.sum)}`).join('\n')}\n\nЖАМИ: ${fmt(total)} сўм\nМижоз: ${customerName}\nСана: ${dateStr}`;
+    const waLink = customerPhone
+      ? `https://wa.me/${customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(shareText)}`
+      : null;
+
+    let shareHtml = `<div style="margin-top:10px;">`;
+    if (invoiceResult.sentViaTelegram) {
+      shareHtml += `<div class="card" style="background:#E1F0E7;border-color:#bfe0cc;font-size:12px;color:var(--green);text-align:center;">✅ Telegram бот орқали дўконга автомат юборилди</div>`;
+    } else {
+      shareHtml += `<div class="card" style="background:#FDF3E1;border-color:#F0DBA0;font-size:11.5px;color:var(--amber-dark);text-align:center;margin-bottom:8px;">ℹ️ Мижоз ботга уланмаган — қўлда юборинг:</div>`;
+      if (waLink) {
+        shareHtml += `<a href="${waLink}" target="_blank" style="text-decoration:none;"><button class="btn" style="width:100%;background:#25D366;color:#fff;margin-bottom:6px;">📤 WhatsApp орқали юбориш</button></a>`;
+      }
+      shareHtml += `<button class="btn" style="width:100%;background:var(--teal-950);color:var(--cream);" onclick='navigator.clipboard.writeText(${JSON.stringify(shareText)}).then(()=>alert("Нусха олинди!"))'>📋 Матнни нусха олиш</button>`;
+    }
+    shareHtml += `</div>`;
+    document.getElementById('receiptWrap').insertAdjacentHTML('afterend', shareHtml);
 
     // Formani tozalaymiz
     document.getElementById('inv-customer').value = '';
