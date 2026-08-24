@@ -25,6 +25,8 @@ export type Product = {
   name: string;
   image_url: string | null;
   price: number;
+  cost_price: number | null;
+  units_per_package: number | null;
   stock_qty: number;
   low_stock_threshold: number;
   is_active: boolean;
