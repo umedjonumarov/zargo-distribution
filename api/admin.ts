@@ -19,22 +19,7 @@ export default async function handler(req: any, res: any) {
 
   // CORS emas — bir domendan (admin.html shu Vercel loyihasida) ishlatiladi
   if (!checkPassword(req)) {
-    // VAQTINCHA DEBUG: parolning o'zini emas, faqat uzunligini ko'rsatamiz —
-    // muammoni topgach shu qismni olib tashlaymiz
-    const provided = (
-      req.headers["x-admin-password"] || req.query?.password || req.body?.password || ""
-    )
-      .toString()
-      .trim();
-    const expected = (process.env.ADMIN_PASSWORD || "").trim();
-    res.status(401).json({
-      error: "Noto'g'ri parol",
-      debug: {
-        providedLength: provided.length,
-        expectedLength: expected.length,
-        envVarExists: !!process.env.ADMIN_PASSWORD,
-      },
-    });
+    res.status(401).json({ error: "Noto'g'ri parol" });
     return;
   }
 
@@ -153,11 +138,13 @@ export default async function handler(req: any, res: any) {
       }
 
       if (action === "add_product") {
-        const { category, name, price, stockQty, lowStockThreshold, imageUrl } = req.body;
+        const { category, name, price, costPrice, unitsPerPackage, stockQty, lowStockThreshold, imageUrl } = req.body;
         const { error } = await supabase.from("products").insert({
           category,
           name,
           price,
+          cost_price: costPrice || null,
+          units_per_package: unitsPerPackage || null,
           stock_qty: stockQty || 0,
           low_stock_threshold: lowStockThreshold || 20,
           image_url: imageUrl || null,
@@ -165,6 +152,51 @@ export default async function handler(req: any, res: any) {
         });
         if (error) throw new Error(error.message);
         res.status(200).json({ ok: true });
+        return;
+      }
+
+      if (action === "update_product") {
+        const { productId, category, name, price, costPrice, unitsPerPackage, stockQty, lowStockThreshold, imageUrl } = req.body;
+        const updatePayload: any = {
+          category,
+          name,
+          price,
+          cost_price: costPrice || null,
+          units_per_package: unitsPerPackage || null,
+          stock_qty: stockQty,
+          low_stock_threshold: lowStockThreshold,
+        };
+        // Rasm faqat yangisi yuborilganda yangilanadi (eskisi saqlanib qolishi uchun)
+        if (imageUrl) updatePayload.image_url = imageUrl;
+
+        const { error } = await supabase.from("products").update(updatePayload).eq("id", productId);
+        if (error) throw new Error(error.message);
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      if (action === "upload_image") {
+        const { base64Data, fileName, contentType } = req.body;
+        if (!base64Data || !fileName) {
+          res.status(400).json({ error: "Rasm ma'lumoti yetishmayapti" });
+          return;
+        }
+        const buffer = Buffer.from(base64Data, "base64");
+        const uniqueName = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, "")}`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from("product-images")
+          .upload(uniqueName, buffer, {
+            contentType: contentType || "image/jpeg",
+            upsert: false,
+          });
+        if (uploadErr) throw new Error(uploadErr.message);
+
+        const { data: publicUrlData } = supabase.storage
+          .from("product-images")
+          .getPublicUrl(uniqueName);
+
+        res.status(200).json({ ok: true, url: publicUrlData.publicUrl });
         return;
       }
 
