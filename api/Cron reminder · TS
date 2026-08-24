@@ -2,6 +2,56 @@ import { supabase } from "../lib/supabase.js";
 import { sendMessage } from "../lib/telegram.js";
 import { t, Lang } from "../lib/i18n.js";
 
+// Tojikiston (Asia/Dushanbe, UTC+5, DST yo'q) bo'yicha "kecha"ning UTC chegaralarini hisoblaymiz.
+// Cron aynan 02:00 UTC (=07:00 mahalliy) da ishga tushadi, shuning uchun server UTC sanasi
+// aynan mahalliy sana bilan bir xil bo'ladi shu payt.
+function getYesterdayRangeUTC(): { start: string; end: string } {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const dMidnightUTC = new Date(`${todayStr}T00:00:00Z`);
+  const rangeEnd = new Date(dMidnightUTC.getTime() - 5 * 60 * 60 * 1000); // mahalliy bugungi 00:00
+  const rangeStart = new Date(rangeEnd.getTime() - 24 * 60 * 60 * 1000); // mahalliy kechagi 00:00
+  return { start: rangeStart.toISOString(), end: rangeEnd.toISOString() };
+}
+
+async function buildDailyReport(): Promise<string> {
+  const { start, end } = getYesterdayRangeUTC();
+
+  const { data: orders } = await supabase
+    .from("orders")
+    .select("id, total_amount, order_items(qty, unit_price, products(cost_price))")
+    .gte("created_at", start)
+    .lt("created_at", end)
+    .in("status", ["confirmed", "delivered"]);
+
+  const orderList = orders || [];
+  const totalSales = orderList.reduce((sum, o: any) => sum + Number(o.total_amount), 0);
+  const orderCount = orderList.length;
+  const avgCheck = orderCount > 0 ? totalSales / orderCount : 0;
+
+  let netProfit = 0;
+  for (const order of orderList as any[]) {
+    for (const item of order.order_items || []) {
+      const costPrice = item.products?.cost_price;
+      if (costPrice != null) {
+        netProfit += (Number(item.unit_price) - Number(costPrice)) * Number(item.qty);
+      }
+    }
+  }
+
+  const yesterdayDate = new Date(new Date(start).getTime() + 12 * 60 * 60 * 1000); // taxminiy kun ko'rsatish uchun
+  const dateLabel = yesterdayDate.toLocaleDateString("ru-RU", { timeZone: "Asia/Dushanbe" });
+
+  return [
+    `📊 <b>Кунлик ҳисобот — ${dateLabel}</b>`,
+    ``,
+    `Умумий савдо: ${totalSales.toLocaleString("ru-RU")} сўм`,
+    `Заказлар сони: ${orderCount} та`,
+    `Ўртача чек: ${Math.round(avgCheck).toLocaleString("ru-RU")} сўм`,
+    `Соф фойда: ${Math.round(netProfit).toLocaleString("ru-RU")} сўм`,
+  ].join("\n");
+}
+
 // Bu endpoint har kuni Vercel Cron orqali (vercel.json'da belgilangan vaqtda) chaqiriladi.
 // Xavfsizlik: so'rov Vercel Cron'dan kelganini CRON_SECRET orqali tekshiramiz.
 export default async function handler(req: any, res: any) {
@@ -38,13 +88,17 @@ export default async function handler(req: any, res: any) {
       remindedShops.push(`${shop.name} (${shop.owner_name}) — ${remaining.toLocaleString("ru-RU")} сўм`);
     }
 
-    // Adminga bugungi ro'yxatni yuboramiz
+    // Adminga bugungi qarz ro'yxatini yuboramiz
     if (process.env.ADMIN_TELEGRAM_CHAT_ID) {
       const summary =
         remindedShops.length > 0
           ? `📋 <b>Бугун қарз қайтариш куни:</b>\n\n${remindedShops.join("\n")}`
           : `✅ Бугун муддати келган қарз йўқ.`;
       await sendMessage(process.env.ADMIN_TELEGRAM_CHAT_ID, summary);
+
+      // Kechagi kunlik savdo/foyda hisobotini ham yuboramiz
+      const dailyReport = await buildDailyReport();
+      await sendMessage(process.env.ADMIN_TELEGRAM_CHAT_ID, dailyReport);
     }
 
     res.status(200).json({ ok: true, remindedCount: remindedShops.length });
