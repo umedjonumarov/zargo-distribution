@@ -212,9 +212,22 @@ export default async function handler(req: any, res: any) {
       }
 
       if (action === "create_manual_invoice") {
-        const { customerName, customerPhone, existingShopId, items } = req.body;
+        const { customerName, customerPhone, existingShopId, items, paidNow, paymentMethod, cashAmount, cardAmount, dueDate } = req.body;
         if (!customerName || !items || items.length === 0) {
           res.status(400).json({ error: "Mijoz nomi va tovarlar kerak" });
+          return;
+        }
+
+        const total = items.reduce(
+          (sum: number, i: any) => sum + Number(i.sum ?? i.qty * i.unitPrice),
+          0
+        );
+        const paidNowNum = Number(paidNow ?? total);
+        const remaining = Math.round((total - paidNowNum) * 100) / 100;
+
+        // Qarz qoldig'i bo'lsa — muddat SHART, aks holda naklad yopilmaydi
+        if (remaining > 0 && !dueDate) {
+          res.status(400).json({ error: "Қарз қолдиғи бор — қайтариш санасини киритинг" });
           return;
         }
 
@@ -307,11 +320,39 @@ export default async function handler(req: any, res: any) {
 
         const { error: confirmErr } = await supabase
           .from("orders")
-          .update({ status: "confirmed", confirmed_by: "admin" })
+          .update({
+            status: "confirmed",
+            confirmed_by: "admin",
+            payment_method: paymentMethod || (remaining > 0 ? "debt" : "cash"),
+            cash_amount: cashAmount || 0,
+            card_amount: cardAmount || 0,
+            paid_now: paidNowNum,
+            due_date: remaining > 0 ? dueDate : null,
+          })
           .eq("id", order.id);
         if (confirmErr) throw new Error(confirmErr.message);
 
-        // Do'kon Telegram botga ulangan bo'lsa — chekni avtomatik yuboramiz
+        // Agar mijoz darhol biror summa to'lagan bo'lsa — debt_transactions'ga "payment" yozamiz,
+        // shu orqali current_debt avtomatik to'g'ri hisoblanadi (charge - payment = qoldiq qarz)
+        if (paidNowNum > 0) {
+          const methodNote =
+            paymentMethod === "mixed"
+              ? `Naqd: ${Number(cashAmount || 0).toLocaleString("ru-RU")}, Karta: ${Number(cardAmount || 0).toLocaleString("ru-RU")}`
+              : paymentMethod === "card"
+              ? "Karta orqali"
+              : "Naqd";
+          await supabase.from("debt_transactions").insert({
+            shop_id: shopId,
+            type: "payment",
+            amount: paidNowNum,
+            order_id: order.id,
+            note: `Naklad to'lovi (${methodNote})`,
+          });
+        }
+
+        // Do'kon Telegram botga ulangan bo'lsa — chekni avtomatik yuboramiz.
+        // MUHIM: Telegram'ning HAQIQIY javobini tekshiramiz, faqat chat_id borligini emas —
+        // aks holda eski/noto'g'ri chat_id bo'lsa ham "yuborildi" deb noto'g'ri ko'rsatib qo'yamiz
         let sentViaTelegram = false;
         const { data: shopInfo } = await supabase
           .from("shops")
@@ -320,21 +361,28 @@ export default async function handler(req: any, res: any) {
           .maybeSingle();
 
         if (shopInfo?.telegram_chat_id) {
-          const total = items.reduce(
-            (sum: number, i: any) => sum + Number(i.sum ?? i.qty * i.unitPrice),
-            0
-          );
           const itemsText = items
             .map((i: any) => `${i.name} × ${i.qty} = ${Number(i.sum ?? i.qty * i.unitPrice).toLocaleString("ru-RU")}`)
             .join("\n");
-          const receiptText = `🧾 <b>ZarGo — Наклад / чек</b>\n\n${itemsText}\n\n<b>ЖАМИ: ${total.toLocaleString(
-            "ru-RU"
-          )} сўм</b>`;
-          await sendMessage(shopInfo.telegram_chat_id, receiptText);
-          sentViaTelegram = true;
+          let receiptText = `🧾 <b>ZarGo — Наклад / чек</b>\n\n${itemsText}\n\n<b>ЖАМИ: ${total.toLocaleString("ru-RU")} сўм</b>`;
+          if (remaining > 0) {
+            receiptText += `\n\nТўланди: ${paidNowNum.toLocaleString("ru-RU")} сўм\nҚарз қолдиғи: ${remaining.toLocaleString(
+              "ru-RU"
+            )} сўм\nҚайтариш санаси: ${dueDate}`;
+          }
+          const tgResult = await sendMessage(shopInfo.telegram_chat_id, receiptText);
+          if (tgResult?.ok) {
+            sentViaTelegram = true;
+          } else {
+            // Eski/noto'g'ri chat_id — bog'lanishni tozalaymiz, admin panelda QR tugmasi qayta chiqadi
+            await supabase
+              .from("shops")
+              .update({ telegram_chat_id: null, status: "pending_link" })
+              .eq("id", shopId);
+          }
         }
 
-        res.status(200).json({ ok: true, orderId: order.id, shopId, sentViaTelegram });
+        res.status(200).json({ ok: true, orderId: order.id, shopId, sentViaTelegram, remaining });
         return;
       }
 
