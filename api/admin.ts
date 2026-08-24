@@ -501,6 +501,101 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
+      if (action === "edit_order") {
+        const { orderId, items } = req.body; // items: [{ productId, qty }]
+        if (!orderId || !items || items.length === 0) {
+          res.status(400).json({ error: "Ma'lumot yetarli emas" });
+          return;
+        }
+
+        const { data: order } = await supabase
+          .from("orders")
+          .select("*, shop_id")
+          .eq("id", orderId)
+          .maybeSingle();
+        if (!order) {
+          res.status(404).json({ error: "Buyurtma topilmadi" });
+          return;
+        }
+
+        const wasConfirmed = order.status === "confirmed";
+        const oldTotal = Number(order.total_amount);
+
+        // Eski order_items'larni o'chiramiz, yangilarini qo'shamiz
+        await supabase.from("order_items").delete().eq("order_id", orderId);
+
+        const { data: products } = await supabase
+          .from("products")
+          .select("*")
+          .in(
+            "id",
+            items.map((i: any) => i.productId)
+          );
+        const productMap = new Map((products || []).map((p: any) => [p.id, p]));
+
+        const newItemsPayload = items.map((item: any) => {
+          const p = productMap.get(item.productId);
+          return { order_id: orderId, product_id: item.productId, qty: item.qty, unit_price: p ? p.price : 0 };
+        });
+        await supabase.from("order_items").insert(newItemsPayload);
+
+        // total_amount trigger orqali avtomatik qayta hisoblanadi. Agar buyurtma
+        // avval "confirmed" bo'lgan bo'lsa, qarz farqini debt_transactions orqali to'g'rilaymiz
+        const { data: updatedOrder } = await supabase
+          .from("orders")
+          .select("total_amount")
+          .eq("id", orderId)
+          .maybeSingle();
+        const newTotal = Number(updatedOrder?.total_amount ?? 0);
+
+        if (wasConfirmed) {
+          const diff = Math.round((newTotal - oldTotal) * 100) / 100;
+          if (diff > 0) {
+            await supabase.from("debt_transactions").insert({
+              shop_id: order.shop_id,
+              type: "charge",
+              amount: diff,
+              order_id: orderId,
+              note: "Buyurtma admin tomonidan tahrirlandi (oshirildi)",
+            });
+          } else if (diff < 0) {
+            await supabase.from("debt_transactions").insert({
+              shop_id: order.shop_id,
+              type: "payment",
+              amount: Math.abs(diff),
+              order_id: orderId,
+              note: "Buyurtma admin tomonidan tahrirlandi (kamaytirildi)",
+            });
+          }
+
+          // Do'konga xabar beramiz
+          const { data: shopInfo } = await supabase
+            .from("shops")
+            .select("telegram_chat_id, language, current_debt")
+            .eq("id", order.shop_id)
+            .maybeSingle();
+          if (shopInfo?.telegram_chat_id && shopInfo.language) {
+            const lang = shopInfo.language as Lang;
+            const msg =
+              lang === "uz"
+                ? `✏️ Буюртмангиз (№${orderId.slice(0, 8)}) администратор томонидан таҳрирланди.\n\nЯнги сумма: ${newTotal.toLocaleString(
+                    "ru-RU"
+                  )} сўм\nЖорий қарз: ${Number(shopInfo.current_debt).toLocaleString("ru-RU")} сўм`
+                : lang === "tj"
+                ? `✏️ Фармоиши шумо (№${orderId.slice(0, 8)}) аз ҷониби администратор таҳрир шуд.\n\nМаблағи нав: ${newTotal.toLocaleString(
+                    "ru-RU"
+                  )} сомонӣ\nҚарзи ҷорӣ: ${Number(shopInfo.current_debt).toLocaleString("ru-RU")} сомонӣ`
+                : `✏️ Ваш заказ (№${orderId.slice(0, 8)}) был изменён администратором.\n\nНовая сумма: ${newTotal.toLocaleString(
+                    "ru-RU"
+                  )} сум\nТекущий долг: ${Number(shopInfo.current_debt).toLocaleString("ru-RU")} сум`;
+            await sendMessage(shopInfo.telegram_chat_id, msg);
+          }
+        }
+
+        res.status(200).json({ ok: true, newTotal });
+        return;
+      }
+
       res.status(400).json({ error: "Noma'lum amal (action)" });
       return;
     }
