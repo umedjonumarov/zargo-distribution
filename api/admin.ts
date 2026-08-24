@@ -13,6 +13,10 @@ function checkPassword(req: any): boolean {
 }
 
 export default async function handler(req: any, res: any) {
+  // Muhim: bu javob HECH QACHON keshlanmasligi kerak, aks holda
+  // eski "noto'g'ri parol" javobi barcha keyingi urinishlarga qaytarilib qoladi
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+
   // CORS emas — bir domendan (admin.html shu Vercel loyihasida) ishlatiladi
   if (!checkPassword(req)) {
     res.status(401).json({ error: "Noto'g'ri parol" });
