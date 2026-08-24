@@ -6,6 +6,7 @@
 <title>ZarGo — Админ панел</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 <style>
   :root{
     --teal-950:#0F3D3E;
@@ -143,9 +144,26 @@
   input[type=number]::-webkit-inner-spin-button,
   input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
   input[type=number]{-moz-appearance:textfield;appearance:textfield;}
+
+  .scan-btn{flex-shrink:0;background:var(--teal-950);color:var(--cream);border:none;border-radius:8px;padding:0 14px;font-size:16px;cursor:pointer;}
+  .scanner-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:200;padding:16px;}
+  .scanner-overlay.open{display:flex;}
+  .scanner-box{background:var(--cream-card);border-radius:16px;padding:16px;max-width:360px;width:100%;text-align:center;}
+  .scanner-box p{font-size:12px;color:var(--ink-soft);margin:8px 0 12px;}
+  .scanner-box video{width:100%;border-radius:12px;background:#000;}
+  .scanner-box button{width:100%;background:var(--red);color:#fff;border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-top:12px;}
 </style>
 </head>
 <body>
+
+<div class="scanner-overlay" id="scannerOverlay">
+  <div class="scanner-box">
+    <div style="font-weight:700;font-size:14px;">📷 Штрих-код / QR скaнerlash</div>
+    <p>Камерани тoвар штрих-кодига қаратинг</p>
+    <video id="scannerVideo"></video>
+    <button onclick="closeScanner()">Бекор қилиш / Ёпиш</button>
+  </div>
+</div>
 
 <div class="lock-screen" id="lockScreen">
   <div class="lock-box">
@@ -207,7 +225,10 @@
 
     <div class="section-label"><span>Товарлар</span></div>
     <div id="invoiceItems"></div>
-    <button class="add-toggle" style="width:100%;padding:9px;margin-bottom:14px;" onclick="addInvoiceRow()">+ Қатор қўшиш</button>
+    <div style="display:flex;gap:6px;margin-bottom:14px;">
+      <button class="add-toggle" style="flex:1;padding:9px;" onclick="addInvoiceRow()">+ Қатор қўшиш</button>
+      <button class="add-toggle" style="flex:1;padding:9px;background:var(--teal-950);color:var(--cream);" onclick="scanForInvoice()">📷 Скaнерлаш</button>
+    </div>
 
     <div class="card" style="background:var(--teal-950);color:var(--cream);">
       <div class="row-between">
@@ -283,8 +304,11 @@
 
     <div class="add-form" id="restockForm">
       <div style="font-weight:700;font-size:13px;margin-bottom:8px;">📦 Мавжуд товарга кirim қўшиш</div>
-      <label>Товарни танланг (номини ёза бошланг)</label>
-      <input id="rs-product-search" list="productNamesList" placeholder="Товар номини ёзинг..." style="width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;margin-bottom:4px;" oninput="onRestockProductInput()">
+      <label>Товарни танланг (номини ёза бошланг ёки скaнерланг)</label>
+      <div style="display:flex;gap:6px;margin-bottom:4px;">
+        <input id="rs-product-search" list="productNamesList" placeholder="Товар номини ёзинг..." style="flex:1;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13px;font-family:inherit;" oninput="onRestockProductInput()">
+        <button type="button" class="scan-btn" onclick="scanForRestock()">📷</button>
+      </div>
       <datalist id="productNamesList"></datalist>
       <div id="rs-product-confirm" style="font-size:11px;color:var(--ink-soft);margin-bottom:8px;min-height:14px;"></div>
       <input type="hidden" id="rs-product">
@@ -303,6 +327,12 @@
       <input id="np-category" placeholder="Масалан: Shokolad">
       <label>Номи</label>
       <input id="np-name" placeholder="Масалан: Milka 100g">
+
+      <label>Штрих-код (ихтиёрий)</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input id="np-barcode" placeholder="Скaнерлаш ёки қўлда ёзиш" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;">
+        <button type="button" class="scan-btn" onclick="openScanner(code => document.getElementById('np-barcode').value = code)">📷</button>
+      </div>
 
       <label>Расм</label>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
@@ -343,6 +373,43 @@
 
 <script>
 const BOT_USERNAME = 'zargoaibot'; // Agar bot username boshqacha bo'lsa, shu yerni o'zgartiring
+// ============ ШТРИХ-КОД / QR СКAНЕР ============
+let zxingReader = null;
+
+function openScanner(onResult) {
+  const overlay = document.getElementById('scannerOverlay');
+  overlay.classList.add('open');
+  const video = document.getElementById('scannerVideo');
+
+  if (typeof ZXing === 'undefined') {
+    alert('Скaнер китобхонаси юкланмади. Интернет алоқасини текширинг.');
+    closeScanner();
+    return;
+  }
+
+  zxingReader = new ZXing.BrowserMultiFormatReader();
+  zxingReader
+    .decodeFromVideoDevice(null, video, (result, err) => {
+      if (result) {
+        const text = result.getText();
+        closeScanner();
+        onResult(text);
+      }
+    })
+    .catch((err) => {
+      alert('Камера очилмади: ' + err.message + '\n\nБраузерга камера рухсатини берганингизни текширинг.');
+      closeScanner();
+    });
+}
+
+function closeScanner() {
+  document.getElementById('scannerOverlay').classList.remove('open');
+  if (zxingReader) {
+    try { zxingReader.reset(); } catch (e) {}
+    zxingReader = null;
+  }
+}
+
 let ADMIN_PASSWORD = '';
 
 function tryLogin() {
@@ -684,6 +751,26 @@ function onRestockProductInput() {
   }
 }
 
+async function scanForRestock() {
+  openScanner(async (code) => {
+    try {
+      const result = await api({ action: 'find_by_barcode', barcode: code });
+      if (result.product) {
+        const p = result.product;
+        document.getElementById('rs-product-search').value = `${p.name} — ${p.category} (ҳозир: ${p.stock_qty} ${unitLabel(p.unit)})`;
+        document.getElementById('rs-product').value = p.id;
+        restockSelectedProduct = p;
+        document.getElementById('rs-product-confirm').textContent = `✅ Скaнерланди: ${p.name}`;
+        document.getElementById('rs-product-confirm').style.color = 'var(--green)';
+        document.getElementById('rs-cost').value = p.cost_price || '';
+        document.getElementById('rs-qty').focus();
+      } else {
+        alert("Бу штрих-код бўйича товар топилмади. Номини қўлда ёзинг.");
+      }
+    } catch (e) { alert('Хатолик: ' + e.message); }
+  });
+}
+
 function onPackageCostInput() {
   const packageCost = parseFloat(document.getElementById('rs-package-cost').value);
   if (!restockSelectedProduct || !restockSelectedProduct.units_per_package || !packageCost) return;
@@ -729,6 +816,7 @@ function openProductForm(product) {
     document.getElementById('productFormTitle').textContent = '✏️ Таҳрирлаш: ' + product.name;
     document.getElementById('np-category').value = product.category || '';
     document.getElementById('np-name').value = product.name || '';
+    document.getElementById('np-barcode').value = product.barcode || '';
     document.getElementById('np-cost').value = product.cost_price || '';
     document.getElementById('np-units').value = product.units_per_package || '';
     document.getElementById('np-price').value = product.price || '';
@@ -747,6 +835,7 @@ function openProductForm(product) {
     document.getElementById('productFormTitle').textContent = 'Янги товар';
     document.getElementById('np-category').value = '';
     document.getElementById('np-name').value = '';
+    document.getElementById('np-barcode').value = '';
     document.getElementById('np-cost').value = '';
     document.getElementById('np-units').value = '';
     document.getElementById('np-price').value = '';
@@ -791,6 +880,7 @@ document.getElementById('np-image-file').addEventListener('change', function (e)
 async function submitProduct() {
   const category = document.getElementById('np-category').value.trim();
   const name = document.getElementById('np-name').value.trim();
+  const barcode = document.getElementById('np-barcode').value.trim() || null;
   const price = parseFloat(document.getElementById('np-price').value);
   const costPrice = parseFloat(document.getElementById('np-cost').value) || null;
   const unitsPerPackage = parseInt(document.getElementById('np-units').value) || null;
@@ -816,14 +906,14 @@ async function submitProduct() {
       await api({
         action: 'update_product',
         productId: editingProductId,
-        category, name, price, costPrice, unitsPerPackage, unit, stockQty,
+        category, name, price, costPrice, unitsPerPackage, unit, barcode, stockQty,
         lowStockThreshold: isNaN(lowStockThreshold) ? 20 : lowStockThreshold,
         imageUrl,
       });
     } else {
       await api({
         action: 'add_product',
-        category, name, price, costPrice, unitsPerPackage, unit, stockQty,
+        category, name, price, costPrice, unitsPerPackage, unit, barcode, stockQty,
         lowStockThreshold: isNaN(lowStockThreshold) ? 20 : lowStockThreshold,
         imageUrl,
       });
@@ -879,6 +969,27 @@ function getInvoiceRows() {
 }
 
 let selectedPaymentMethod = null;
+
+async function scanForInvoice() {
+  openScanner(async (code) => {
+    try {
+      const result = await api({ action: 'find_by_barcode', barcode: code });
+      addInvoiceRow();
+      const rows = document.querySelectorAll('#invoiceItems .inv-row');
+      const lastRow = rows[rows.length - 1];
+      if (result.product) {
+        lastRow.querySelector('.inv-name').value = result.product.name;
+        lastRow.querySelector('.inv-price').value = result.product.price;
+        lastRow.querySelector('.inv-qty').focus();
+        lastRow.querySelector('.inv-qty').select();
+      } else {
+        alert("Штрих-код топилмади — товар номини қўлда ёзинг");
+        lastRow.querySelector('.inv-name').focus();
+      }
+      recalcInvoiceTotal();
+    } catch (e) { alert('Хатолик: ' + e.message); }
+  });
+}
 
 function recalcInvoiceTotal() {
   const items = getInvoiceRows();
