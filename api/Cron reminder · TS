@@ -1,0 +1,55 @@
+import { supabase } from "../lib/supabase.js";
+import { sendMessage } from "../lib/telegram.js";
+import { t, Lang } from "../lib/i18n.js";
+
+// Bu endpoint har kuni Vercel Cron orqali (vercel.json'da belgilangan vaqtda) chaqiriladi.
+// Xavfsizlik: so'rov Vercel Cron'dan kelganini CRON_SECRET orqali tekshiramiz.
+export default async function handler(req: any, res: any) {
+  const authHeader = req.headers["authorization"];
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // Bugun muddati kelgan, hali to'lanmagan (qarzi bor) buyurtmalarni topamiz
+    const { data: dueOrders, error } = await supabase
+      .from("orders")
+      .select("id, due_date, total_amount, paid_now, shop_id, shops(name, owner_name, telegram_chat_id, language, current_debt)")
+      .eq("due_date", today);
+
+    if (error) throw new Error(error.message);
+
+    const remindedShops: string[] = [];
+
+    for (const order of dueOrders || []) {
+      const shop: any = (order as any).shops;
+      if (!shop) continue;
+
+      const remaining = Number(order.total_amount) - Number(order.paid_now || 0);
+      if (remaining <= 0) continue; // allaqachon to'liq to'langan
+
+      if (shop.telegram_chat_id && shop.language) {
+        const lang = shop.language as Lang;
+        await sendMessage(shop.telegram_chat_id, t.debtReminder[lang](remaining));
+      }
+      remindedShops.push(`${shop.name} (${shop.owner_name}) — ${remaining.toLocaleString("ru-RU")} сўм`);
+    }
+
+    // Adminga bugungi ro'yxatni yuboramiz
+    if (process.env.ADMIN_TELEGRAM_CHAT_ID) {
+      const summary =
+        remindedShops.length > 0
+          ? `📋 <b>Бугун қарз қайтариш куни:</b>\n\n${remindedShops.join("\n")}`
+          : `✅ Бугун муддати келган қарз йўқ.`;
+      await sendMessage(process.env.ADMIN_TELEGRAM_CHAT_ID, summary);
+    }
+
+    res.status(200).json({ ok: true, remindedCount: remindedShops.length });
+  } catch (err: any) {
+    console.error("Cron reminder xato:", err);
+    res.status(500).json({ error: err.message || "Server xatosi" });
+  }
+}
