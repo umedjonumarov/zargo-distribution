@@ -634,7 +634,51 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
-      res.status(400).json({ error: "Noma'lum amal (action)" });
+      if (action === "mark_delivered") {
+        const { orderId, paymentMethod, cashAmount, cardAmount } = req.body;
+        if (!orderId || !paymentMethod) {
+          res.status(400).json({ error: "orderId va to'lov turi kerak" });
+          return;
+        }
+
+        const { error } = await supabase
+          .from("orders")
+          .update({
+            status: "delivered",
+            delivered_at: new Date().toISOString(),
+            payment_method: paymentMethod,
+            cash_amount: cashAmount || 0,
+            card_amount: cardAmount || 0,
+          })
+          .eq("id", orderId);
+        if (error) throw new Error(error.message);
+
+        const { data: order } = await supabase
+          .from("orders")
+          .select("shop_id")
+          .eq("id", orderId)
+          .maybeSingle();
+
+        if (order) {
+          const { data: shopInfo } = await supabase
+            .from("shops")
+            .select("telegram_chat_id, language")
+            .eq("id", order.shop_id)
+            .maybeSingle();
+
+          if (shopInfo?.telegram_chat_id && shopInfo.language) {
+            const lang = shopInfo.language as Lang;
+            const methodLabel =
+              { uz: { cash: "Нақд", card: "Карта", mixed: "Аралаш" }, tj: { cash: "Нақд", card: "Карт", mixed: "Омехта" }, ru: { cash: "Наличные", card: "Карта", mixed: "Смешанно" } }[
+                lang
+              ][paymentMethod as "cash" | "card" | "mixed"] || paymentMethod;
+            await sendMessage(shopInfo.telegram_chat_id, t.orderDelivered[lang](orderId, methodLabel));
+          }
+        }
+
+        res.status(200).json({ ok: true });
+        return;
+      }
       return;
     }
 
