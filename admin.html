@@ -180,6 +180,15 @@
   </div>
 </div>
 
+<div class="qr-overlay" id="orderEditOverlay">
+  <div class="qr-box" style="max-width:340px;text-align:left;">
+    <h3 id="oe-title" style="margin-bottom:10px;">Буюртмани таҳрирлаш</h3>
+    <div id="oe-items" style="max-height:50vh;overflow-y:auto;"></div>
+    <button onclick="submitOrderEdit()" style="background:var(--green);">💾 Сақлаш</button>
+    <button onclick="closeEditOrder()" style="background:var(--teal-950);margin-top:6px;">Бекор қилиш</button>
+  </div>
+</div>
+
 <div class="qr-overlay" id="qrOverlay">
   <div class="qr-box">
     <h3 id="qrShopName">—</h3>
@@ -344,7 +353,7 @@
 
       <label>Канчадан келиши (1 дона нархи)</label>
       <input id="np-cost" type="number" placeholder="31.66" oninput="recalcProductPreview()">
-      <label>Упаковкада нечта дона</label>
+      <label>Упаковкада нечта дона (қути/пачка/қоп танланса — мижозга ҳам кўринади, "дона/кг" бўлса — фақат сиз учун)</label>
       <input id="np-units" type="number" placeholder="12" oninput="recalcProductPreview()">
       <label>Сотиш нархи (1 дона, дўконларга)</label>
       <input id="np-price" type="number" placeholder="34.5" oninput="recalcProductPreview()">
@@ -355,6 +364,7 @@
         <option value="litr">литр</option>
         <option value="quti">қути/короб (нарх — бутун қутига)</option>
         <option value="pachka">пачка (нарх — бутун пачкага)</option>
+        <option value="qop">қоп (нарх — бутун қопга)</option>
       </select>
       <label>Бошланғич қолдиқ (ҳозир омборда неча бор)</label>
       <input id="np-stock" type="number" placeholder="200">
@@ -658,12 +668,13 @@ function closeQrModal() {
 function renderOrderCard(o) {
   const shopName = o.shops ? o.shops.name : 'Номаълум дўкон';
   const ownerName = o.shops ? o.shops.owner_name : '';
-  const itemsText = (o.order_items || []).map(i => `${i.products ? i.products.name : '?'} × ${i.qty}`).join(', ');
+  const itemsList = (o.order_items || []);
+  const itemsText = itemsList.map(i => `${i.products ? i.products.name : '?'} × ${i.qty}`).join(', ');
   const statusTag = o.status === 'pending' ? '<span class="tag pending">Кутмоқда</span>'
     : o.status === 'confirmed' ? '<span class="tag ok">Тасдиқланган</span>'
     : o.status === 'delivered' ? '<span class="tag ok">Етказилган</span>'
     : '<span class="tag neutral">Бекор қилинган</span>';
-  const dateStr = new Date(o.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const dateStr = new Date(o.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dushanbe' });
 
   let html = `
     <div class="card">
@@ -676,11 +687,13 @@ function renderOrderCard(o) {
         <div class="amount">${fmt(o.total_amount)} сўм</div>
       </div>
       <div class="order-items">${itemsText}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
   `;
   if (o.status === 'pending') {
-    html += `<div style="margin-top:8px;"><button class="btn btn-confirm" onclick="confirmOrder('${o.id}')">✅ Тасдиқлаш</button></div>`;
+    html += `<button class="btn btn-confirm" style="flex:1;" onclick="confirmOrder('${o.id}')">✅ Тасдиқлаш</button>`;
   }
-  html += `</div>`;
+  html += `<button class="btn" style="flex:1;background:none;border:1px solid var(--line);color:var(--teal-800);" onclick='openEditOrder(${JSON.stringify({ id: o.id, shopName, items: itemsList.map(i => ({ productId: i.products ? i.product_id : null, name: i.products ? i.products.name : '?', qty: i.qty })) }).replace(/'/g, "&apos;")})'>✏️ Таҳрирлаш</button>`;
+  html += `</div></div>`;
   return html;
 }
 
@@ -693,7 +706,7 @@ function renderOrders() {
 }
 
 function unitLabel(unit) {
-  return { dona: 'дона', kg: 'кг', litr: 'литр', quti: 'қути', pachka: 'пачка' }[unit] || 'дона';
+  return { dona: 'дона', kg: 'кг', litr: 'литр', quti: 'қути', pachka: 'пачка', qop: 'қоп' }[unit] || 'дона';
 }
 
 function renderProducts() {
@@ -730,6 +743,60 @@ async function confirmOrder(orderId) {
   if (!confirm('Шу буюртмани тасдиқлайсизми?')) return;
   try {
     await api({ action: 'confirm_order', orderId });
+    await loadAll();
+  } catch (e) { alert('Хатолик: ' + e.message); }
+}
+
+let editingOrderId = null;
+
+function openEditOrder(order) {
+  editingOrderId = order.id;
+  document.getElementById('oe-title').textContent = 'Таҳрирлаш: ' + order.shopName;
+  const container = document.getElementById('oe-items');
+  container.innerHTML = order.items.map((item, idx) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);">
+      <div style="flex:1;font-size:12.5px;">${item.name}</div>
+      <input type="hidden" class="oe-pid" value="${item.productId || ''}">
+      <button onclick="oeChangeQty(${idx}, -1)" style="width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--cream);font-weight:700;">−</button>
+      <span class="oe-qty" id="oe-qty-${idx}" style="min-width:24px;text-align:center;font-weight:700;font-size:12.5px;">${item.qty}</span>
+      <button onclick="oeChangeQty(${idx}, 1)" style="width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--cream);font-weight:700;">+</button>
+      <button onclick="oeRemoveItem(${idx})" style="background:none;border:none;color:var(--red);font-size:16px;">✕</button>
+    </div>
+  `).join('');
+  window._oeItems = order.items.slice();
+  document.getElementById('orderEditOverlay').classList.add('open');
+}
+
+function oeChangeQty(idx, delta) {
+  window._oeItems[idx].qty = Math.max(0, window._oeItems[idx].qty + delta);
+  const el = document.getElementById('oe-qty-' + idx);
+  if (el) el.textContent = window._oeItems[idx].qty;
+}
+
+function oeRemoveItem(idx) {
+  window._oeItems[idx].qty = 0;
+  const el = document.getElementById('oe-qty-' + idx);
+  if (el) el.textContent = 0;
+}
+
+function closeEditOrder() {
+  document.getElementById('orderEditOverlay').classList.remove('open');
+  editingOrderId = null;
+}
+
+async function submitOrderEdit() {
+  const items = (window._oeItems || [])
+    .filter(i => i.qty > 0 && i.productId)
+    .map(i => ({ productId: i.productId, qty: i.qty }));
+
+  if (items.length === 0) {
+    alert('Камида битта товар қолиши керак (ёки буюртмани бекор қилинг)');
+    return;
+  }
+
+  try {
+    await api({ action: 'edit_order', orderId: editingOrderId, items });
+    closeEditOrder();
     await loadAll();
   } catch (e) { alert('Хатолик: ' + e.message); }
 }
@@ -906,9 +973,14 @@ function recalcProductPreview() {
   // qutining narxini ko'rsatish foydali (cost * units_per_package).
   // "quti/pachka/karobka" bo'lsa — narxlar ALLAQACHON butun quti/pachka uchun,
   // shuning uchun yana units'ga ko'paytirish XATO bo'ladi (ikki marta hisoblanadi)
-  if (unit === 'dona') {
+  // "dona/kg/litr" — bular ATOM birliklar, narx shu birlikka tegishli, shuning uchun
+  // butun qutining narxini ko'rsatish foydali (cost * units_per_package).
+  // "quti/pachka/qop" — bular QADOQ birliklar, narx ALLAQACHON butun qadoqqa tegishli,
+  // shuning uchun yana ko'paytirish XATO bo'ladi (ikki marta hisoblanadi)
+  const isAtomicUnit = unit === 'dona' || unit === 'kg' || unit === 'litr';
+  if (isAtomicUnit) {
     document.getElementById('pv-package').textContent = fmt(cost * units);
-    document.getElementById('pv-package-label').textContent = 'Упаковка нархи (тахминий)';
+    document.getElementById('pv-package-label').textContent = 'Қадоқ нархи (тахминий)';
   } else {
     document.getElementById('pv-package').textContent = units ? `${units} дона (маълумот учун)` : '—';
     document.getElementById('pv-package-label').textContent = 'Ичида';
