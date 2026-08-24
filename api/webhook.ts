@@ -146,7 +146,7 @@ async function handleMenuAction(chatId: number, callbackId: string, action: stri
       const lines = orders
         .map(
           (o) =>
-            `• ${new Date(o.created_at).toLocaleDateString("ru-RU")} — ${Number(
+            `• ${new Date(o.created_at).toLocaleDateString("ru-RU", { timeZone: "Asia/Dushanbe" })} — ${Number(
               o.total_amount
             ).toLocaleString("ru-RU")} (${o.status})`
         )
