@@ -103,6 +103,7 @@
   .pcard-body{padding:10px 11px 12px;display:flex;flex-direction:column;gap:6px;flex:1;}
   .pcard-name{font-size:12.5px;font-weight:700;line-height:1.25;min-height:32px;}
   .pcard-price{font-size:13.5px;font-weight:800;color:var(--green);}
+  .pcard-package-info{font-size:10px;color:var(--ink-soft);margin-top:-3px;}
   .pcard-actions{margin-top:auto;}
 
   .add-btn{
@@ -303,6 +304,7 @@ async function api(action, extra) {
 }
 
 function fmt(n) { return Number(n || 0).toLocaleString('ru-RU'); }
+function unitLabel(unit) { return { dona: 'дона', kg: 'кг', litr: 'литр', quti: 'қути', pachka: 'пачка', qop: 'қоп' }[unit] || 'дона'; }
 
 async function init() {
   try {
@@ -375,15 +377,21 @@ function renderGrid() {
     const imgContent = p.image_url
       ? `<img src="${p.image_url}" alt="">`
       : (CATEGORY_EMOJI[p.category] || '📦');
+    const isPackageUnit = ['quti', 'pachka', 'qop'].includes(p.unit);
+    const unitSuffix = ` / ${unitLabel(p.unit)}`;
+    const packageInfo = isPackageUnit && p.units_per_package
+      ? `<div class="pcard-package-info">ичида ${p.units_per_package} дона</div>`
+      : '';
     return `
       <div class="pcard" id="card-${p.id}">
         <div class="pcard-img">
           ${imgContent}
-          <div class="stock-badge">${p.stock_qty} дона</div>
+          <div class="stock-badge">${p.stock_qty} ${unitLabel(p.unit)}</div>
         </div>
         <div class="pcard-body">
           <div class="pcard-name">${p.name}</div>
-          <div class="pcard-price">${fmt(p.price)} сўм</div>
+          <div class="pcard-price">${fmt(p.price)} сўм${unitSuffix}</div>
+          ${packageInfo}
           <div class="pcard-actions" id="actions-${p.id}">
             ${qty > 0 ? stepperHtml(p.id, qty) : `<button class="add-btn" onclick="changeQty('${p.id}', 1)">+ Қўшиш</button>`}
           </div>
@@ -513,21 +521,12 @@ async function checkout() {
     const successSub = document.getElementById('successSub');
     const successDetail = document.getElementById('successDetail');
 
-    if (result.willExceedLimit) {
-      successTitle.textContent = 'Буюртма қабул қилинди';
-      successSub.textContent = 'Лимитдан ошгани учун администратор тасдиқлашини кутинг';
-      successDetail.innerHTML = `
-        <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)} сўм</span></div>
-        <div class="success-detail-row"><span>Ҳолат</span><span>⏳ Кутмоқда</span></div>
-      `;
-    } else {
-      successTitle.textContent = 'Буюртма қабул қилинди!';
-      successSub.textContent = 'Раҳмат, тез орада етказиб берамиз';
-      successDetail.innerHTML = `
-        <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)} сўм</span></div>
-        <div class="success-detail-row"><span>Янги қарз</span><span>${fmt(result.newDebt)} сўм</span></div>
-      `;
-    }
+    successTitle.textContent = 'Буюртма қабул қилинди!';
+    successSub.textContent = 'Администратор кўриб чиқиб, тез орада тасдиқлайди';
+    successDetail.innerHTML = `
+      <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)} сўм</span></div>
+      <div class="success-detail-row"><span>Ҳолат</span><span>⏳ Кўриб чиқилмоқда</span></div>
+    `;
 
     document.getElementById('successOverlay').classList.add('show');
     if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
