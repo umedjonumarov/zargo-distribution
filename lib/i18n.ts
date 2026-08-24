@@ -160,6 +160,14 @@ export const t = {
     ru: (amount: number, newDebt: number) =>
       `💵 Платёж принят: ${amount.toLocaleString("ru-RU")} сум\n\nОстаток долга: ${newDebt.toLocaleString("ru-RU")} сум`,
   },
+  debtReminder: {
+    uz: (amount: number) =>
+      `⏰ Эслатма: бугун қарзингизни тўлаш куни келди.\n\nТўлов суммаси: ${amount.toLocaleString("ru-RU")} сўм\n\nИлтимос, администратор билан боғланиб тўловни амалга оширинг.`,
+    tj: (amount: number) =>
+      `⏰ Ёдрас: имрӯз рӯзи пардохти қарзи шумост.\n\nМаблағ: ${amount.toLocaleString("ru-RU")} сомонӣ\n\nЛутфан бо администратор тамос гирифта пардохт кунед.`,
+    ru: (amount: number) =>
+      `⏰ Напоминание: сегодня день оплаты вашего долга.\n\nСумма: ${amount.toLocaleString("ru-RU")} сум\n\nПожалуйста, свяжитесь с администратором для оплаты.`,
+  },
 };
 
 export const langLabel: Record<Lang, string> = {
