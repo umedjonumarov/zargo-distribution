@@ -218,14 +218,30 @@ export default async function handler(req: any, res: any) {
           return;
         }
 
-        // 1) Mijozni (shop) topamiz yoki yaratamiz
+        // 1) Mijozni (shop) topamiz yoki yaratamiz.
+        //    Avval telefon raqami bo'yicha (ishonchliroq), keyin nom bo'yicha (harflar katta-kichikligiga qaramasdan) qidiramiz
         let shopId = existingShopId;
         if (!shopId) {
-          const { data: existingShop } = await supabase
-            .from("shops")
-            .select("id")
-            .eq("name", customerName)
-            .maybeSingle();
+          let existingShop = null;
+
+          if (customerPhone) {
+            const { data } = await supabase
+              .from("shops")
+              .select("id")
+              .eq("owner_phone", customerPhone)
+              .maybeSingle();
+            existingShop = data;
+          }
+
+          if (!existingShop) {
+            const { data } = await supabase
+              .from("shops")
+              .select("id")
+              .ilike("name", customerName.trim())
+              .maybeSingle();
+            existingShop = data;
+          }
+
           if (existingShop) {
             shopId = existingShop.id;
           } else {
@@ -236,7 +252,7 @@ export default async function handler(req: any, res: any) {
                 owner_name: customerName,
                 owner_phone: customerPhone || null,
                 debt_limit: 999999999,
-                status: "active",
+                status: "pending_link", // Telegram'ga hali ulanmagan — admin panelda QR tugmasi chiqishi uchun
               })
               .select()
               .single();
