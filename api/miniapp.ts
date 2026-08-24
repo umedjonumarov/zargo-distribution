@@ -1,5 +1,6 @@
 import { createHmac } from "crypto";
 import { supabase } from "../lib/supabase.js";
+import { sendMessage } from "../lib/telegram.js";
 
 // Telegram WebApp initData'ni tekshirish — bu so'rov HAQIQATAN HAM
 // Telegram'ning o'zidan kelganini va hech kim soxtalashtirmaganini isbotlaydi.
@@ -123,7 +124,6 @@ export default async function handler(req: any, res: any) {
       }
 
       const oldDebt = Number(shop.current_debt);
-      const willExceedLimit = oldDebt + total > Number(shop.debt_limit);
 
       const { data: order } = await supabase
         .from("orders")
@@ -138,24 +138,29 @@ export default async function handler(req: any, res: any) {
       });
       await supabase.from("order_items").insert(orderItemsPayload);
 
-      if (!willExceedLimit) {
-        await supabase.from("orders").update({ status: "confirmed", confirmed_by: "auto" }).eq("id", order.id);
-      }
-
       await saveCartItems(shop.id, []);
 
-      const { data: updatedShop } = await supabase
-        .from("shops")
-        .select("current_debt")
-        .eq("id", shop.id)
-        .maybeSingle();
+      // MUHIM: buyurtma endi avtomatik tasdiqlanmaydi — admin ko'rib,
+      // kerak bo'lsa miqdorlarni tahrirlab, keyin tasdiqlaydi
+      if (process.env.ADMIN_TELEGRAM_CHAT_ID) {
+        const itemsText = items
+          .map((i) => {
+            const p = productMap.get(i.product_id);
+            return `${p ? p.name : "?"} × ${i.qty}`;
+          })
+          .join("\n");
+        await sendMessage(
+          process.env.ADMIN_TELEGRAM_CHAT_ID,
+          `🆕 <b>Янги буюртма</b>\n\nДўкон: ${shop.name} (${shop.owner_name})\n\n${itemsText}\n\nЖами: ${total.toLocaleString(
+            "ru-RU"
+          )} сўм\n\nAdmin panel -> Буюртмалар'да кўриб, тасдиқланг.`
+        );
+      }
 
       res.status(200).json({
         ok: true,
-        willExceedLimit,
+        pending: true,
         total,
-        oldDebt,
-        newDebt: Number(updatedShop?.current_debt ?? oldDebt + total),
         orderId: order.id,
       });
       return;
