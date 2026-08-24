@@ -275,8 +275,16 @@ function tryLogin() {
       document.getElementById('lockScreen').style.display = 'none';
       applyData(data);
     })
-    .catch(() => {
-      document.getElementById('lockError').textContent = "Нотўғри парол, қайта уриниб кўринг";
+    .catch(async (err) => {
+      let debugText = '';
+      try {
+        const res2 = await fetch('/api/admin?_=' + Date.now(), { headers: { 'x-admin-password': pw }, cache: 'no-store' });
+        const data2 = await res2.json();
+        if (data2.debug) {
+          debugText = ` (kiritilgan: ${data2.debug.providedLength} belgi, kutilayotgan: ${data2.debug.expectedLength} belgi, ADMIN_PASSWORD topildi: ${data2.debug.envVarExists ? 'ha' : "YO'Q"})`;
+        }
+      } catch (e) {}
+      document.getElementById('lockError').textContent = "Нотўғри парол, қайта уриниб кўринг" + debugText;
     });
 }
 
