@@ -169,12 +169,38 @@ export const t = {
       `⏰ Напоминание: сегодня день оплаты вашего долга.\n\nСумма: ${amount.toLocaleString("ru-RU")} сум\n\nПожалуйста, свяжитесь с администратором для оплаты.`,
   },
   orderDelivered: {
-    uz: (orderId: string, method: string) =>
-      `🚚 Буюртмангиз (№${orderId.slice(0, 8)}) етказиб берилди!\n\nТўлов тури: ${method}\n\nРаҳмат!`,
-    tj: (orderId: string, method: string) =>
-      `🚚 Фармоиши шумо (№${orderId.slice(0, 8)}) расонида шуд!\n\nНавъи пардохт: ${method}\n\nРаҳмат!`,
-    ru: (orderId: string, method: string) =>
-      `🚚 Ваш заказ (№${orderId.slice(0, 8)}) доставлен!\n\nСпособ оплаты: ${method}\n\nСпасибо!`,
+    uz: (orderNum: number, itemsText: string, total: number, method: string, paid: number, remaining: number) =>
+      `🚚 <b>Буюртма №${orderNum} етказиб берилди!</b>\n\n${itemsText}\n\nЖами: ${total.toLocaleString(
+        "ru-RU"
+      )} сўм\nТўлов тури: ${method}\nТўланди: ${paid.toLocaleString("ru-RU")} сўм${
+        remaining > 0 ? `\n⚠️ Қолган қарз: ${remaining.toLocaleString("ru-RU")} сўм` : "\n✅ Тўлиқ тўланди"
+      }\n\nРаҳмат!`,
+    tj: (orderNum: number, itemsText: string, total: number, method: string, paid: number, remaining: number) =>
+      `🚚 <b>Фармоиш №${orderNum} расонида шуд!</b>\n\n${itemsText}\n\nҲамагӣ: ${total.toLocaleString(
+        "ru-RU"
+      )} сомонӣ\nНавъи пардохт: ${method}\nПардохт шуд: ${paid.toLocaleString("ru-RU")} сомонӣ${
+        remaining > 0 ? `\n⚠️ Қарзи боқимонда: ${remaining.toLocaleString("ru-RU")} сомонӣ` : "\n✅ Пурра пардохт шуд"
+      }\n\nРаҳмат!`,
+    ru: (orderNum: number, itemsText: string, total: number, method: string, paid: number, remaining: number) =>
+      `🚚 <b>Заказ №${orderNum} доставлен!</b>\n\n${itemsText}\n\nИтого: ${total.toLocaleString(
+        "ru-RU"
+      )} сум\nСпособ оплаты: ${method}\nОплачено: ${paid.toLocaleString("ru-RU")} сум${
+        remaining > 0 ? `\n⚠️ Остаток долга: ${remaining.toLocaleString("ru-RU")} сум` : "\n✅ Оплачено полностью"
+      }\n\nСпасибо!`,
+  },
+  orderEditedDiff: {
+    uz: (orderNum: number, diffText: string, newTotal: number, currentDebt: number) =>
+      `✏️ <b>Буюртмангиз (№${orderNum}) администратор томонидан таҳрирланди.</b>\n\n${diffText}\n\nЯнги сумма: ${newTotal.toLocaleString(
+        "ru-RU"
+      )} сўм\nЖорий қарз: ${currentDebt.toLocaleString("ru-RU")} сўм`,
+    tj: (orderNum: number, diffText: string, newTotal: number, currentDebt: number) =>
+      `✏️ <b>Фармоиши шумо (№${orderNum}) аз ҷониби администратор таҳрир шуд.</b>\n\n${diffText}\n\nМаблағи нав: ${newTotal.toLocaleString(
+        "ru-RU"
+      )} сомонӣ\nҚарзи ҷорӣ: ${currentDebt.toLocaleString("ru-RU")} сомонӣ`,
+    ru: (orderNum: number, diffText: string, newTotal: number, currentDebt: number) =>
+      `✏️ <b>Ваш заказ (№${orderNum}) был изменён администратором.</b>\n\n${diffText}\n\nНовая сумма: ${newTotal.toLocaleString(
+        "ru-RU"
+      )} сум\nТекущий долг: ${currentDebt.toLocaleString("ru-RU")} сум`,
   },
 };
 
