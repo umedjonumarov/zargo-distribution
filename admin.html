@@ -240,20 +240,36 @@
   <div class="view" id="view-products">
     <div class="section-label">
       <span>Товарлар</span>
-      <button class="add-toggle" onclick="toggleForm('addProductForm')">+ Янги товар</button>
+      <button class="add-toggle" onclick="openProductForm()">+ Янги товар</button>
     </div>
     <div class="add-form" id="addProductForm">
+      <div id="productFormTitle" style="font-weight:700;font-size:13px;margin-bottom:8px;">Янги товар</div>
       <label>Категория</label>
       <input id="np-category" placeholder="Масалан: Shokolad">
       <label>Номи</label>
       <input id="np-name" placeholder="Масалан: Milka 100g">
-      <label>Нархи (дона)</label>
-      <input id="np-price" type="number" placeholder="5000">
-      <label>Бошланғич қолдиқ</label>
+
+      <label>Расм</label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <img id="np-image-preview" style="width:52px;height:52px;border-radius:8px;object-fit:cover;border:1px solid var(--line);display:none;">
+        <input type="file" id="np-image-file" accept="image/*" capture="environment" style="flex:1;font-size:11.5px;">
+      </div>
+
+      <label>Канчадан келиши (1 дона нархи)</label>
+      <input id="np-cost" type="number" placeholder="31.66" oninput="recalcProductPreview()">
+      <label>Упаковкада нечта дона</label>
+      <input id="np-units" type="number" placeholder="12" oninput="recalcProductPreview()">
+      <label>Сотиш нархи (1 дона, дўконларга)</label>
+      <input id="np-price" type="number" placeholder="34.5" oninput="recalcProductPreview()">
+      <label>Бошланғич қолдиқ (дона)</label>
       <input id="np-stock" type="number" placeholder="200">
-      <label>Расм URL (ихтиёрий)</label>
-      <input id="np-image" placeholder="https://...">
-      <button class="btn btn-add" onclick="submitAddProduct()">Товар қўшиш</button>
+
+      <div class="card" style="background:var(--cream);margin:4px 0 10px;" id="productPreview">
+        <div class="card-meta">Упаковка нархи: <b id="pv-package">0</b> · Фойда (1 дона): <b id="pv-margin">0</b></div>
+      </div>
+
+      <button class="btn btn-add" onclick="submitProduct()">Сақлаш</button>
+      <button class="btn" style="width:100%;margin-top:6px;background:none;color:var(--ink-soft);border:1px solid var(--line);" onclick="closeProductForm()">Бекор қилиш</button>
     </div>
     <div id="productsContent" class="loading">Юкланмоқда...</div>
   </div>
@@ -275,16 +291,8 @@ function tryLogin() {
       document.getElementById('lockScreen').style.display = 'none';
       applyData(data);
     })
-    .catch(async (err) => {
-      let debugText = '';
-      try {
-        const res2 = await fetch('/api/admin?_=' + Date.now(), { headers: { 'x-admin-password': pw }, cache: 'no-store' });
-        const data2 = await res2.json();
-        if (data2.debug) {
-          debugText = ` (kiritilgan: ${data2.debug.providedLength} belgi, kutilayotgan: ${data2.debug.expectedLength} belgi, ADMIN_PASSWORD topildi: ${data2.debug.envVarExists ? 'ha' : "YO'Q"})`;
-        }
-      } catch (e) {}
-      document.getElementById('lockError').textContent = "Нотўғри парол, қайта уриниб кўринг" + debugText;
+    .catch(() => {
+      document.getElementById('lockError').textContent = "Нотўғри парол, қайта уриниб кўринг";
     });
 }
 
@@ -510,18 +518,23 @@ function renderProducts() {
   }
   let html = '';
   state.products.forEach(p => {
-    const pct = Math.min(100, Math.round((p.stock_qty / (p.low_stock_threshold * 3)) * 100));
+    const pct = Math.min(100, Math.round((p.stock_qty / (p.low_stock_threshold * 3 || 1)) * 100));
     const isLow = p.stock_qty <= p.low_stock_threshold;
+    const margin = p.cost_price != null ? Number(p.price) - Number(p.cost_price) : null;
     html += `
       <div class="card">
         <div class="row-between">
-          <div>
-            <div class="card-title">${p.name}</div>
-            <div class="card-meta">${p.category} · ${fmt(p.price)} сўм/дона</div>
+          <div style="display:flex;gap:9px;">
+            ${p.image_url ? `<img src="${p.image_url}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;">` : ''}
+            <div>
+              <div class="card-title">${p.name}</div>
+              <div class="card-meta">${p.category} · сотиш: ${fmt(p.price)}${margin !== null ? ' · фойда: ' + fmt(margin) : ''}</div>
+            </div>
           </div>
           <div class="amount ${isLow ? 'high' : ''}">${p.stock_qty} дона</div>
         </div>
         <div class="stock-bar"><div class="stock-fill" style="width:${pct}%;background:${isLow ? 'var(--red)' : 'var(--green)'};"></div></div>
+        <button class="btn" style="margin-top:8px;width:100%;background:none;border:1px solid var(--line);color:var(--teal-800);" onclick='openProductForm(${JSON.stringify(p).replace(/'/g, "&apos;")})'>✏️ Таҳрирлаш</button>
       </div>
     `;
   });
@@ -568,21 +581,117 @@ async function submitAddShop() {
   } catch (e) { alert('Хатолик: ' + e.message); }
 }
 
-async function submitAddProduct() {
+// ============ ТОВАРЛАР (қўшиш / таҳрирлаш) ============
+let editingProductId = null;
+let selectedImageBase64 = null;
+let selectedImageType = null;
+let selectedImageName = null;
+
+function openProductForm(product) {
+  document.getElementById('addProductForm').classList.add('open');
+  selectedImageBase64 = null;
+  document.getElementById('np-image-file').value = '';
+
+  if (product) {
+    editingProductId = product.id;
+    document.getElementById('productFormTitle').textContent = '✏️ Таҳрирлаш: ' + product.name;
+    document.getElementById('np-category').value = product.category || '';
+    document.getElementById('np-name').value = product.name || '';
+    document.getElementById('np-cost').value = product.cost_price || '';
+    document.getElementById('np-units').value = product.units_per_package || '';
+    document.getElementById('np-price').value = product.price || '';
+    document.getElementById('np-stock').value = product.stock_qty || 0;
+    const preview = document.getElementById('np-image-preview');
+    if (product.image_url) {
+      preview.src = product.image_url;
+      preview.style.display = 'block';
+    } else {
+      preview.style.display = 'none';
+    }
+  } else {
+    editingProductId = null;
+    document.getElementById('productFormTitle').textContent = 'Янги товар';
+    document.getElementById('np-category').value = '';
+    document.getElementById('np-name').value = '';
+    document.getElementById('np-cost').value = '';
+    document.getElementById('np-units').value = '';
+    document.getElementById('np-price').value = '';
+    document.getElementById('np-stock').value = '';
+    document.getElementById('np-image-preview').style.display = 'none';
+  }
+  recalcProductPreview();
+  document.getElementById('addProductForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeProductForm() {
+  document.getElementById('addProductForm').classList.remove('open');
+  editingProductId = null;
+}
+
+function recalcProductPreview() {
+  const cost = parseFloat(document.getElementById('np-cost').value) || 0;
+  const units = parseFloat(document.getElementById('np-units').value) || 0;
+  const price = parseFloat(document.getElementById('np-price').value) || 0;
+  document.getElementById('pv-package').textContent = fmt(cost * units);
+  document.getElementById('pv-margin').textContent = fmt(price - cost);
+}
+
+document.getElementById('np-image-file').addEventListener('change', function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedImageType = file.type;
+  selectedImageName = file.name;
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    const dataUrl = ev.target.result;
+    selectedImageBase64 = dataUrl.split(',')[1]; // "data:image/jpeg;base64,XXXX" -> faqat XXXX
+    const preview = document.getElementById('np-image-preview');
+    preview.src = dataUrl;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+});
+
+async function submitProduct() {
   const category = document.getElementById('np-category').value.trim();
   const name = document.getElementById('np-name').value.trim();
   const price = parseFloat(document.getElementById('np-price').value);
+  const costPrice = parseFloat(document.getElementById('np-cost').value) || null;
+  const unitsPerPackage = parseInt(document.getElementById('np-units').value) || null;
   const stockQty = parseInt(document.getElementById('np-stock').value) || 0;
-  const imageUrl = document.getElementById('np-image').value.trim();
-  if (!category || !name || !price) { alert('Категория, номи ва нархини киритинг'); return; }
+
+  if (!category || !name || !price) { alert('Категория, номи ва сотиш нархини киритинг'); return; }
+
   try {
-    await api({ action: 'add_product', category, name, price, stockQty, imageUrl });
-    document.getElementById('np-category').value = '';
-    document.getElementById('np-name').value = '';
-    document.getElementById('np-price').value = '';
-    document.getElementById('np-stock').value = '';
-    document.getElementById('np-image').value = '';
-    toggleForm('addProductForm');
+    let imageUrl = null;
+    if (selectedImageBase64) {
+      const uploadResult = await api({
+        action: 'upload_image',
+        base64Data: selectedImageBase64,
+        fileName: selectedImageName,
+        contentType: selectedImageType,
+      });
+      imageUrl = uploadResult.url;
+    }
+
+    if (editingProductId) {
+      await api({
+        action: 'update_product',
+        productId: editingProductId,
+        category, name, price, costPrice, unitsPerPackage, stockQty,
+        lowStockThreshold: 20,
+        imageUrl,
+      });
+    } else {
+      await api({
+        action: 'add_product',
+        category, name, price, costPrice, unitsPerPackage, stockQty,
+        lowStockThreshold: 20,
+        imageUrl,
+      });
+    }
+
+    closeProductForm();
     await loadAll();
   } catch (e) { alert('Хатолик: ' + e.message); }
 }
