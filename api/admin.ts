@@ -295,7 +295,30 @@ export default async function handler(req: any, res: any) {
           .eq("id", order.id);
         if (confirmErr) throw new Error(confirmErr.message);
 
-        res.status(200).json({ ok: true, orderId: order.id, shopId });
+        // Do'kon Telegram botga ulangan bo'lsa — chekni avtomatik yuboramiz
+        let sentViaTelegram = false;
+        const { data: shopInfo } = await supabase
+          .from("shops")
+          .select("telegram_chat_id, language")
+          .eq("id", shopId)
+          .maybeSingle();
+
+        if (shopInfo?.telegram_chat_id) {
+          const total = items.reduce(
+            (sum: number, i: any) => sum + Number(i.sum ?? i.qty * i.unitPrice),
+            0
+          );
+          const itemsText = items
+            .map((i: any) => `${i.name} × ${i.qty} = ${Number(i.sum ?? i.qty * i.unitPrice).toLocaleString("ru-RU")}`)
+            .join("\n");
+          const receiptText = `🧾 <b>ZarGo — Наклад / чек</b>\n\n${itemsText}\n\n<b>ЖАМИ: ${total.toLocaleString(
+            "ru-RU"
+          )} сўм</b>`;
+          await sendMessage(shopInfo.telegram_chat_id, receiptText);
+          sentViaTelegram = true;
+        }
+
+        res.status(200).json({ ok: true, orderId: order.id, shopId, sentViaTelegram });
         return;
       }
 
