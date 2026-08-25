@@ -3,6 +3,18 @@
 
 export type Lang = "uz" | "tj" | "ru";
 
+// Pulni "14с50д" (14 сомонӣ 50 дирам) ko'rinishida formatlaydi.
+// Butun son bo'lsa faqat "255с" ko'rsatiladi (dirham qismisiz).
+export function fmtSomoni(n: number): string {
+  const neg = n < 0;
+  n = Math.abs(n);
+  const som = Math.floor(n);
+  const dir = Math.round((n - som) * 100);
+  const somStr = som.toLocaleString("ru-RU");
+  const result = dir === 0 ? `${somStr}с` : `${somStr}с${String(dir).padStart(2, "0")}д`;
+  return neg ? "-" + result : result;
+}
+
 export const t = {
   chooseLanguage: {
     uz: "Тилни танланг:",
@@ -43,11 +55,11 @@ export const t = {
   },
   debtSummary: {
     uz: (debt: number, limit: number) =>
-      `💰 Жорий қарзингиз: ${debt.toLocaleString("ru-RU")} сўм\nЛимит: ${limit.toLocaleString("ru-RU")} сўм\nЛимитгача қолди: ${(limit - debt).toLocaleString("ru-RU")} сўм`,
+      `💰 Жорий қарзингиз: ${fmtSomoni(debt)}\nЛимит: ${fmtSomoni(limit)}\nЛимитгача қолди: ${fmtSomoni(limit - debt)}`,
     tj: (debt: number, limit: number) =>
-      `💰 Қарзи ҷории шумо: ${debt.toLocaleString("ru-RU")} сомонӣ\nМаҳдудият: ${limit.toLocaleString("ru-RU")} сомонӣ\nТо маҳдудият монд: ${(limit - debt).toLocaleString("ru-RU")} сомонӣ`,
+      `💰 Қарзи ҷории шумо: ${fmtSomoni(debt)}\nМаҳдудият: ${fmtSomoni(limit)}\nТо маҳдудият монд: ${fmtSomoni(limit - debt)}`,
     ru: (debt: number, limit: number) =>
-      `💰 Ваш текущий долг: ${debt.toLocaleString("ru-RU")} сум\nЛимит: ${limit.toLocaleString("ru-RU")} сум\nОсталось до лимита: ${(limit - debt).toLocaleString("ru-RU")} сум`,
+      `💰 Ваш текущий долг: ${fmtSomoni(debt)}\nЛимит: ${fmtSomoni(limit)}\nОсталось до лимита: ${fmtSomoni(limit - debt)}`,
   },
   contactAdmin: {
     uz: "Администратор:\nTelegram: @umedjon20994\nМуҳаммаджон: +992931811121\nУмеджон: +992927909698",
@@ -105,9 +117,9 @@ export const t = {
     ru: "🧾 Ваша корзина:",
   },
   cartTotal: {
-    uz: (total: number) => `Жами: ${total.toLocaleString("ru-RU")} сўм`,
-    tj: (total: number) => `Ҳамагӣ: ${total.toLocaleString("ru-RU")} сомонӣ`,
-    ru: (total: number) => `Итого: ${total.toLocaleString("ru-RU")} сум`,
+    uz: (total: number) => `Жами: ${fmtSomoni(total)}`,
+    tj: (total: number) => `Ҳамагӣ: ${fmtSomoni(total)}`,
+    ru: (total: number) => `Итого: ${fmtSomoni(total)}`,
   },
   confirmOrderBtn: {
     uz: "✅ Буюртмани тасдиқлаш",
@@ -126,11 +138,11 @@ export const t = {
   },
   orderConfirmed: {
     uz: (oldDebt: number, newDebt: number) =>
-      `✅ Буюртма қабул қилинди!\n\nЭски қарзингиз: ${oldDebt.toLocaleString("ru-RU")} сўм\nЯнги қарз: ${newDebt.toLocaleString("ru-RU")} сўм`,
+      `✅ Буюртма қабул қилинди!\n\nЭски қарзингиз: ${fmtSomoni(oldDebt)}\nЯнги қарз: ${fmtSomoni(newDebt)}`,
     tj: (oldDebt: number, newDebt: number) =>
-      `✅ Фармоиш қабул шуд!\n\nҚарзи кӯҳна: ${oldDebt.toLocaleString("ru-RU")} сомонӣ\nҚарзи нав: ${newDebt.toLocaleString("ru-RU")} сомонӣ`,
+      `✅ Фармоиш қабул шуд!\n\nҚарзи кӯҳна: ${fmtSomoni(oldDebt)}\nҚарзи нав: ${fmtSomoni(newDebt)}`,
     ru: (oldDebt: number, newDebt: number) =>
-      `✅ Заказ принят!\n\nСтарый долг: ${oldDebt.toLocaleString("ru-RU")} сум\nНовый долг: ${newDebt.toLocaleString("ru-RU")} сум`,
+      `✅ Заказ принят!\n\nСтарый долг: ${fmtSomoni(oldDebt)}\nНовый долг: ${fmtSomoni(newDebt)}`,
   },
   orderPendingApproval: {
     uz: "⏳ Буюртмангиз лимитдан ошди, администратор тасдиқлашини кутинг.",
@@ -154,53 +166,53 @@ export const t = {
   },
   paymentReceived: {
     uz: (amount: number, newDebt: number) =>
-      `💵 Тўлов қабул қилинди: ${amount.toLocaleString("ru-RU")} сўм\n\nҚолган қарз: ${newDebt.toLocaleString("ru-RU")} сўм`,
+      `💵 Тўлов қабул қилинди: ${fmtSomoni(amount)}\n\nҚолган қарз: ${fmtSomoni(newDebt)}`,
     tj: (amount: number, newDebt: number) =>
-      `💵 Пардохт қабул шуд: ${amount.toLocaleString("ru-RU")} сомонӣ\n\nҚарзи боқимонда: ${newDebt.toLocaleString("ru-RU")} сомонӣ`,
+      `💵 Пардохт қабул шуд: ${fmtSomoni(amount)}\n\nҚарзи боқимонда: ${fmtSomoni(newDebt)}`,
     ru: (amount: number, newDebt: number) =>
-      `💵 Платёж принят: ${amount.toLocaleString("ru-RU")} сум\n\nОстаток долга: ${newDebt.toLocaleString("ru-RU")} сум`,
+      `💵 Платёж принят: ${fmtSomoni(amount)}\n\nОстаток долга: ${fmtSomoni(newDebt)}`,
   },
   debtReminder: {
     uz: (amount: number) =>
-      `⏰ Эслатма: бугун қарзингизни тўлаш куни келди.\n\nТўлов суммаси: ${amount.toLocaleString("ru-RU")} сўм\n\nИлтимос, администратор билан боғланиб тўловни амалга оширинг.`,
+      `⏰ Эслатма: бугун қарзингизни тўлаш куни келди.\n\nТўлов суммаси: ${fmtSomoni(amount)}\n\nИлтимос, администратор билан боғланиб тўловни амалга оширинг.`,
     tj: (amount: number) =>
-      `⏰ Ёдрас: имрӯз рӯзи пардохти қарзи шумост.\n\nМаблағ: ${amount.toLocaleString("ru-RU")} сомонӣ\n\nЛутфан бо администратор тамос гирифта пардохт кунед.`,
+      `⏰ Ёдрас: имрӯз рӯзи пардохти қарзи шумост.\n\nМаблағ: ${fmtSomoni(amount)}\n\nЛутфан бо администратор тамос гирифта пардохт кунед.`,
     ru: (amount: number) =>
-      `⏰ Напоминание: сегодня день оплаты вашего долга.\n\nСумма: ${amount.toLocaleString("ru-RU")} сум\n\nПожалуйста, свяжитесь с администратором для оплаты.`,
+      `⏰ Напоминание: сегодня день оплаты вашего долга.\n\nСумма: ${fmtSomoni(amount)}\n\nПожалуйста, свяжитесь с администратором для оплаты.`,
   },
   orderDelivered: {
     uz: (orderNum: number, itemsText: string, total: number, method: string, paid: number, remaining: number) =>
-      `🚚 <b>Буюртма №${orderNum} етказиб берилди!</b>\n\n${itemsText}\n\nЖами: ${total.toLocaleString(
-        "ru-RU"
-      )} сўм\nТўлов тури: ${method}\nТўланди: ${paid.toLocaleString("ru-RU")} сўм${
-        remaining > 0 ? `\n⚠️ Қолган қарз: ${remaining.toLocaleString("ru-RU")} сўм` : "\n✅ Тўлиқ тўланди"
+      `🚚 <b>Буюртма №${orderNum} етказиб берилди!</b>\n\n${itemsText}\n\nЖами: ${fmtSomoni(
+        total
+      )}\nТўлов тури: ${method}\nТўланди: ${fmtSomoni(paid)}${
+        remaining > 0 ? `\n⚠️ Қолган қарз: ${fmtSomoni(remaining)}` : "\n✅ Тўлиқ тўланди"
       }\n\nРаҳмат!`,
     tj: (orderNum: number, itemsText: string, total: number, method: string, paid: number, remaining: number) =>
-      `🚚 <b>Фармоиш №${orderNum} расонида шуд!</b>\n\n${itemsText}\n\nҲамагӣ: ${total.toLocaleString(
-        "ru-RU"
-      )} сомонӣ\nНавъи пардохт: ${method}\nПардохт шуд: ${paid.toLocaleString("ru-RU")} сомонӣ${
-        remaining > 0 ? `\n⚠️ Қарзи боқимонда: ${remaining.toLocaleString("ru-RU")} сомонӣ` : "\n✅ Пурра пардохт шуд"
+      `🚚 <b>Фармоиш №${orderNum} расонида шуд!</b>\n\n${itemsText}\n\nҲамагӣ: ${fmtSomoni(
+        total
+      )}\nНавъи пардохт: ${method}\nПардохт шуд: ${fmtSomoni(paid)}${
+        remaining > 0 ? `\n⚠️ Қарзи боқимонда: ${fmtSomoni(remaining)}` : "\n✅ Пурра пардохт шуд"
       }\n\nРаҳмат!`,
     ru: (orderNum: number, itemsText: string, total: number, method: string, paid: number, remaining: number) =>
-      `🚚 <b>Заказ №${orderNum} доставлен!</b>\n\n${itemsText}\n\nИтого: ${total.toLocaleString(
-        "ru-RU"
-      )} сум\nСпособ оплаты: ${method}\nОплачено: ${paid.toLocaleString("ru-RU")} сум${
-        remaining > 0 ? `\n⚠️ Остаток долга: ${remaining.toLocaleString("ru-RU")} сум` : "\n✅ Оплачено полностью"
+      `🚚 <b>Заказ №${orderNum} доставлен!</b>\n\n${itemsText}\n\nИтого: ${fmtSomoni(
+        total
+      )}\nСпособ оплаты: ${method}\nОплачено: ${fmtSomoni(paid)}${
+        remaining > 0 ? `\n⚠️ Остаток долга: ${fmtSomoni(remaining)}` : "\n✅ Оплачено полностью"
       }\n\nСпасибо!`,
   },
   orderEditedDiff: {
     uz: (orderNum: number, diffText: string, newTotal: number, currentDebt: number) =>
-      `✏️ <b>Буюртмангиз (№${orderNum}) администратор томонидан таҳрирланди.</b>\n\n${diffText}\n\nЯнги сумма: ${newTotal.toLocaleString(
-        "ru-RU"
-      )} сўм\nЖорий қарз: ${currentDebt.toLocaleString("ru-RU")} сўм`,
+      `✏️ <b>Буюртмангиз (№${orderNum}) администратор томонидан таҳрирланди.</b>\n\n${diffText}\n\nЯнги сумма: ${fmtSomoni(
+        newTotal
+      )}\nЖорий қарз: ${fmtSomoni(currentDebt)}`,
     tj: (orderNum: number, diffText: string, newTotal: number, currentDebt: number) =>
-      `✏️ <b>Фармоиши шумо (№${orderNum}) аз ҷониби администратор таҳрир шуд.</b>\n\n${diffText}\n\nМаблағи нав: ${newTotal.toLocaleString(
-        "ru-RU"
-      )} сомонӣ\nҚарзи ҷорӣ: ${currentDebt.toLocaleString("ru-RU")} сомонӣ`,
+      `✏️ <b>Фармоиши шумо (№${orderNum}) аз ҷониби администратор таҳрир шуд.</b>\n\n${diffText}\n\nМаблағи нав: ${fmtSomoni(
+        newTotal
+      )}\nҚарзи ҷорӣ: ${fmtSomoni(currentDebt)}`,
     ru: (orderNum: number, diffText: string, newTotal: number, currentDebt: number) =>
-      `✏️ <b>Ваш заказ (№${orderNum}) был изменён администратором.</b>\n\n${diffText}\n\nНовая сумма: ${newTotal.toLocaleString(
-        "ru-RU"
-      )} сум\nТекущий долг: ${currentDebt.toLocaleString("ru-RU")} сум`,
+      `✏️ <b>Ваш заказ (№${orderNum}) был изменён администратором.</b>\n\n${diffText}\n\nНовая сумма: ${fmtSomoni(
+        newTotal
+      )}\nТекущий долг: ${fmtSomoni(currentDebt)}`,
   },
 };
 
