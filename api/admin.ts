@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js";
 import { sendMessage } from "../lib/telegram.js";
-import { t, Lang } from "../lib/i18n.js";
+import { t, Lang, fmtSomoni } from "../lib/i18n.js";
 
 function checkPassword(req: any): boolean {
   const provided = (
@@ -32,7 +32,7 @@ function buildReceiptText(params: {
       const sum = Number(i.sum ?? i.qty * i.unitPrice);
       const name = String(i.name).length > nameWidth ? String(i.name).slice(0, nameWidth - 1) + "…" : String(i.name).padEnd(nameWidth, " ");
       const qtyPart = `× ${i.qty}`.padEnd(6, " ");
-      const sumPart = sum.toLocaleString("ru-RU").padStart(9, " ");
+      const sumPart = fmtSomoni(sum).padStart(9, " ");
       return `${name}${qtyPart}${sumPart}`;
     })
     .join("\n");
@@ -41,9 +41,7 @@ function buildReceiptText(params: {
 
   let statusLine = "✅ <b>Тўлиқ тўланди</b>";
   if (remaining && remaining > 0) {
-    statusLine = `💵 Тўланди: ${(paidNow ?? 0).toLocaleString("ru-RU")} сўм\n⚠️ <b>Қарз қолдиғи: ${remaining.toLocaleString(
-      "ru-RU"
-    )} сўм</b>\n📅 Қайтариш санаси: ${dueDate}`;
+    statusLine = `💵 Тўланди: ${fmtSomoni(paidNow ?? 0)}\n⚠️ <b>Қарз қолдиғи: ${fmtSomoni(remaining)}</b>\n📅 Қайтариш санаси: ${dueDate}`;
   }
 
   return [
@@ -52,7 +50,7 @@ function buildReceiptText(params: {
     dashLine,
     `<code>${itemLines}</code>`,
     dashLine,
-    `<b>ЖАМИ: ${total.toLocaleString("ru-RU")} сўм</b>`,
+    `<b>ЖАМИ: ${fmtSomoni(total)}</b>`,
     statusLine,
     ``,
     `Мижоз: ${customerName}`,
@@ -365,9 +363,9 @@ export default async function handler(req: any, res: any) {
           .maybeSingle();
         if (shopDebtCheck && Number(shopDebtCheck.current_debt) > 0) {
           res.status(400).json({
-            error: `Мижознинг жорий қарзи бор: ${Number(shopDebtCheck.current_debt).toLocaleString(
-              "ru-RU"
-            )} сўм. Янги наклад ёзишдан олдин аввалги қарзни тўлаши керак.`,
+            error: `Мижознинг жорий қарзи бор: ${fmtSomoni(
+              Number(shopDebtCheck.current_debt)
+            )}. Янги наклад ёзишдан олдин аввалги қарзни тўлаши керак.`,
           });
           return;
         }
@@ -412,7 +410,7 @@ export default async function handler(req: any, res: any) {
         if (paidNowNum > 0) {
           const methodNote =
             paymentMethod === "mixed"
-              ? `Naqd: ${Number(cashAmount || 0).toLocaleString("ru-RU")}, Karta: ${Number(cardAmount || 0).toLocaleString("ru-RU")}`
+              ? `Naqd: ${fmtSomoni(Number(cashAmount || 0))}, Karta: ${fmtSomoni(Number(cardAmount || 0))}`
               : paymentMethod === "card"
               ? "Karta orqali"
               : "Naqd";
@@ -710,7 +708,7 @@ export default async function handler(req: any, res: any) {
             }[lang][paymentMethod as "cash" | "card" | "mixed"] || paymentMethod;
 
           const itemsText = (order.order_items || [])
-            .map((i: any) => `${i.products ? i.products.name : "?"} × ${i.qty} = ${Number(i.unit_price * i.qty).toLocaleString("ru-RU")}`)
+            .map((i: any) => `${i.products ? i.products.name : "?"} × ${i.qty} = ${fmtSomoni(Number(i.unit_price * i.qty))}`)
             .join("\n");
 
           await sendMessage(
