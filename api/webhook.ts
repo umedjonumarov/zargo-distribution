@@ -1,6 +1,6 @@
 import { supabase, Shop, Product, CartItem } from "../lib/supabase.js";
 import { sendMessage, sendPhoto, answerCallbackQuery, editMessageReplyMarkup, InlineButton } from "../lib/telegram.js";
-import { t, langLabel, Lang, getCategoryLabel } from "../lib/i18n.js";
+import { t, langLabel, Lang, getCategoryLabel, fmtSomoni } from "../lib/i18n.js";
 
 // ---------------------------------------------------------
 // Asosiy menyu tugmalarini chiqarish
@@ -146,9 +146,9 @@ async function handleMenuAction(chatId: number, callbackId: string, action: stri
       const lines = orders
         .map(
           (o) =>
-            `• ${new Date(o.created_at).toLocaleDateString("ru-RU", { timeZone: "Asia/Dushanbe" })} — ${Number(
-              o.total_amount
-            ).toLocaleString("ru-RU")} (${o.status})`
+            `• ${new Date(o.created_at).toLocaleDateString("ru-RU", { timeZone: "Asia/Dushanbe" })} — ${fmtSomoni(
+              Number(o.total_amount)
+            )} (${o.status})`
         )
         .join("\n");
       await sendMessage(chatId, lines);
@@ -286,9 +286,7 @@ async function handleShowProducts(
 
   for (const product of products as Product[]) {
     const currentQty = getCartQty(cartItems, product.id);
-    const caption = `<b>${product.name}</b>\n${product.price.toLocaleString(
-      "ru-RU"
-    )} сўм / дона\nОмборда: ${product.stock_qty} дона`;
+    const caption = `<b>${product.name}</b>\n${fmtSomoni(product.price)} / дона\nОмборда: ${product.stock_qty} дона`;
 
     const buttons: InlineButton[][] = [qtyStepperRow(product.id, currentQty)];
 
@@ -486,7 +484,7 @@ async function handleViewCart(chatId: number, callbackId: string) {
     if (!p) return "";
     const lineTotal = p.price * item.qty;
     total += lineTotal;
-    return `${p.name} × ${item.qty} = ${lineTotal.toLocaleString("ru-RU")}`;
+    return `${p.name} × ${item.qty} = ${fmtSomoni(lineTotal)}`;
   });
 
   const text = [t.cartHeader[lang], ...lines, "", t.cartTotal[lang](total)].join("\n");
