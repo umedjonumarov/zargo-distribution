@@ -1,6 +1,7 @@
 import { createHmac } from "crypto";
 import { supabase } from "../lib/supabase.js";
 import { sendMessage } from "../lib/telegram.js";
+import { fmtSomoni } from "../lib/i18n.js";
 
 // Telegram WebApp initData'ni tekshirish — bu so'rov HAQIQATAN HAM
 // Telegram'ning o'zidan kelganini va hech kim soxtalashtirmaganini isbotlaydi.
@@ -167,9 +168,9 @@ export default async function handler(req: any, res: any) {
           : "✅ Автоматик тасдиқланди";
         await sendMessage(
           process.env.ADMIN_TELEGRAM_CHAT_ID,
-          `🆕 <b>Янги буюртма</b>\n\nДўкон: ${shop.name} (${shop.owner_name})\n\n${itemsText}\n\nЖами: ${total.toLocaleString(
-            "ru-RU"
-          )} сўм\n${statusNote}`
+          `🆕 <b>Янги буюртма</b>\n\nДўкон: ${shop.name} (${shop.owner_name})\n\n${itemsText}\n\nЖами: ${fmtSomoni(
+            total
+          )}\n${statusNote}`
         );
       }
 
