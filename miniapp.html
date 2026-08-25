@@ -236,7 +236,7 @@
     <div class="header-name" id="shopGreeting">—</div>
     <div class="header-debt">
       <span>Жорий қарз</span>
-      <span class="amt" id="debtAmount">0 сўм</span>
+      <span class="amt" id="debtAmount">0с</span>
     </div>
   </div>
 
@@ -249,7 +249,7 @@
     <div class="cart-bar-count" id="cartCount">0</div>
     <div class="cart-bar-text">Саватни кўриш</div>
   </div>
-  <div class="cart-bar-total" id="cartBarTotal">0 сўм</div>
+  <div class="cart-bar-total" id="cartBarTotal">0с</div>
 </div>
 
 <div class="sheet-overlay" id="sheetOverlay" onclick="if(event.target===this) closeSheet()">
@@ -263,7 +263,7 @@
     <div class="sheet-footer">
       <div class="sheet-total-row">
         <span class="sheet-total-label">Жами</span>
-        <span class="sheet-total-amt" id="sheetTotal">0 сўм</span>
+        <span class="sheet-total-amt" id="sheetTotal">0с</span>
       </div>
       <button class="checkout-btn" id="checkoutBtn" onclick="checkout()">Буюртмани тасдиқлаш</button>
     </div>
@@ -303,7 +303,16 @@ async function api(action, extra) {
   return data;
 }
 
-function fmt(n) { return Number(n || 0).toLocaleString('ru-RU'); }
+function fmt(n) {
+  n = Number(n || 0);
+  const neg = n < 0;
+  n = Math.abs(n);
+  const som = Math.floor(n);
+  const dir = Math.round((n - som) * 100);
+  const somStr = som.toLocaleString('ru-RU');
+  const result = dir === 0 ? `${somStr}с` : `${somStr}с${String(dir).padStart(2, '0')}д`;
+  return neg ? '-' + result : result;
+}
 function unitLabel(unit) { return { dona: 'дона', kg: 'кг', litr: 'литр', quti: 'қути', pachka: 'пачка', qop: 'қоп' }[unit] || 'дона'; }
 
 async function init() {
@@ -337,7 +346,7 @@ async function init() {
 
 function updateDebtDisplay() {
   const debtEl = document.getElementById('debtAmount');
-  debtEl.textContent = fmt(state.shop.current_debt) + ' сўм';
+  debtEl.textContent = fmt(state.shop.current_debt);
   debtEl.classList.toggle('warn', Number(state.shop.current_debt) > 0);
 }
 
@@ -390,7 +399,7 @@ function renderGrid() {
         </div>
         <div class="pcard-body">
           <div class="pcard-name">${p.name}</div>
-          <div class="pcard-price">${fmt(p.price)} сўм${unitSuffix}</div>
+          <div class="pcard-price">${fmt(p.price)}${unitSuffix}</div>
           ${packageInfo}
           <div class="pcard-actions" id="actions-${p.id}">
             ${qty > 0 ? stepperHtml(p.id, qty) : `<button class="add-btn" onclick="changeQty('${p.id}', 1)">+ Қўшиш</button>`}
@@ -460,7 +469,7 @@ function updateCartBar() {
   }, 0);
 
   document.getElementById('cartCount').textContent = totalItems;
-  document.getElementById('cartBarTotal').textContent = fmt(total) + ' сўм';
+  document.getElementById('cartBarTotal').textContent = fmt(total);
   bar.classList.toggle('show', totalItems > 0);
 }
 
@@ -478,7 +487,7 @@ function renderCartSheet() {
   const rows = document.getElementById('cartRows');
   if (state.cart.length === 0) {
     rows.innerHTML = `<div class="empty-state">Саватингиз бўш</div>`;
-    document.getElementById('sheetTotal').textContent = '0 сўм';
+    document.getElementById('sheetTotal').textContent = '0с';
     return;
   }
 
@@ -494,7 +503,7 @@ function renderCartSheet() {
         <div class="cart-row-img">${imgContent}</div>
         <div class="cart-row-info">
           <div class="cart-row-name">${p.name}</div>
-          <div class="cart-row-price">${fmt(p.price)} сўм × ${item.qty} = ${fmt(sum)} сўм</div>
+          <div class="cart-row-price">${fmt(p.price)} × ${item.qty} = ${fmt(sum)}</div>
         </div>
         <div class="cart-row-stepper">
           <button onclick="changeQty('${p.id}', -1)">−</button>
@@ -505,7 +514,7 @@ function renderCartSheet() {
     `;
   }).join('');
 
-  document.getElementById('sheetTotal').textContent = fmt(total) + ' сўм';
+  document.getElementById('sheetTotal').textContent = fmt(total);
 }
 
 async function checkout() {
@@ -525,15 +534,15 @@ async function checkout() {
       successTitle.textContent = 'Буюртма қабул қилинди';
       successSub.textContent = 'Лимитдан ошгани учун администратор тасдиқлашини кутинг';
       successDetail.innerHTML = `
-        <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)} сўм</span></div>
+        <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)}</span></div>
         <div class="success-detail-row"><span>Ҳолат</span><span>⏳ Кутмоқда</span></div>
       `;
     } else {
       successTitle.textContent = 'Буюртма қабул қилинди!';
       successSub.textContent = 'Раҳмат, тез орада етказиб берамиз';
       successDetail.innerHTML = `
-        <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)} сўм</span></div>
-        <div class="success-detail-row"><span>Янги қарз</span><span>${fmt(result.newDebt)} сўм</span></div>
+        <div class="success-detail-row"><span>Сумма</span><span>${fmt(result.total)}</span></div>
+        <div class="success-detail-row"><span>Янги қарз</span><span>${fmt(result.newDebt)}</span></div>
       `;
     }
 
