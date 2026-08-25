@@ -244,7 +244,7 @@
     <div class="card" style="background:var(--teal-950);color:var(--cream);">
       <div class="row-between">
         <span style="font-size:13px;font-weight:600;">Жами:</span>
-        <span id="invoiceTotal" style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;">0 сўм</span>
+        <span id="invoiceTotal" style="font-family:'Fraunces',serif;font-size:20px;font-weight:700;">0с</span>
       </div>
     </div>
 
@@ -269,7 +269,7 @@
 
       <div id="debtSection" style="display:none;">
         <div class="card" style="background:#FBE4E1;border-color:#F0BDB6;margin-top:8px;">
-          <div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:6px;">⚠️ Қарз қолдиғи: <span id="debtRemaining">0</span> сўм</div>
+          <div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:6px;">⚠️ Қарз қолдиғи: <span id="debtRemaining">0</span></div>
           <label style="font-size:11px;color:var(--ink-soft);font-weight:600;display:block;margin-bottom:3px;">Қарзни қайтариш санаси (мажбурий)</label>
           <input id="inv-duedate" type="date" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 9px;font-size:12.5px;font-family:inherit;">
         </div>
@@ -293,7 +293,7 @@
       <input id="ns-owner" placeholder="Масалан: Аҳмад ака">
       <label>Телефон</label>
       <input id="ns-phone" placeholder="+992...">
-      <label>Қарз лимити (сўм)</label>
+      <label>Қарз лимити (смн)</label>
       <input id="ns-limit" type="number" placeholder="1000000">
       <button class="btn btn-add" onclick="submitAddShop()">Дўкон қўшиш</button>
     </div>
@@ -504,7 +504,16 @@ async function api(body) {
   return data;
 }
 
-function fmt(n) { return Number(n || 0).toLocaleString('ru-RU'); }
+function fmt(n) {
+  n = Number(n || 0);
+  const neg = n < 0;
+  n = Math.abs(n);
+  const som = Math.floor(n);
+  const dir = Math.round((n - som) * 100);
+  const somStr = som.toLocaleString('ru-RU');
+  const result = dir === 0 ? `${somStr}с` : `${somStr}с${String(dir).padStart(2, '0')}д`;
+  return neg ? '-' + result : result;
+}
 
 function showTab(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -570,8 +579,8 @@ function renderDashboard() {
     <div class="kpi-row">
       <div class="kpi">
         <div class="kpi-label">Умумий қарздорлик (${state.shops.length} дўкон)</div>
-        <div class="kpi-value">${fmt(totalDebt)} сўм</div>
-        <div class="kpi-label" style="margin-top:4px;">Лимит жами: ${fmt(totalLimit)} сўм</div>
+        <div class="kpi-value">${fmt(totalDebt)}</div>
+        <div class="kpi-label" style="margin-top:4px;">Лимит жами: ${fmt(totalLimit)}</div>
       </div>
       <div class="kpi alt">
         <div class="kpi-label">Бугунги буюртма</div>
@@ -588,7 +597,7 @@ function renderDashboard() {
     html += `<div class="section-label"><span>⚠️ Диққат талаб қилади</span></div>`;
     state.shops.filter(s => s.status === 'blocked').forEach(s => {
       html += `<div class="card"><div class="card-title">🔴 ${s.name}</div>
-        <div class="card-meta">${s.owner_name} — лимит тўлган, қарз ${fmt(s.current_debt)} сўм</div></div>`;
+        <div class="card-meta">${s.owner_name} — лимит тўлган, қарз ${fmt(s.current_debt)}</div></div>`;
     });
   }
 
@@ -685,7 +694,7 @@ function renderOrderCard(o) {
           <div class="card-meta">${ownerName} · ${dateStr}</div>
           ${statusTag}
         </div>
-        <div class="amount">${fmt(o.total_amount)} сўм</div>
+        <div class="amount">${fmt(o.total_amount)}</div>
       </div>
       <div class="order-items">${itemsText}</div>
       <div style="display:flex;gap:6px;margin-top:8px;">
@@ -761,7 +770,7 @@ async function confirmDelivery(orderId, shortId, total) {
 
   const remaining = Number(total) - paidAmount;
   const confirmText = remaining > 0.01
-    ? `Диққат: ${fmt(remaining)} сўм қарз бўлиб қолади. Давом этасизми?`
+    ? `Диққат: ${fmt(remaining)} қарз бўлиб қолади. Давом этасизми?`
     : 'Буюртма тўлиқ тўланган ҳолда етказилди деб белгилансинми?';
   if (!confirm(confirmText)) return;
 
@@ -822,7 +831,7 @@ function renderUnpaidDeliveredCard(o) {
           <div class="card-title">№${o.order_number} — ${shopName}</div>
           <div class="card-meta">Жами: ${fmt(o.total_amount)} · Тўланган: ${fmt(o.paid_now || 0)}</div>
         </div>
-        <div class="amount high">${fmt(remaining)} сўм</div>
+        <div class="amount high">${fmt(remaining)}</div>
       </div>
       <div class="pay-input-row">
         <input type="number" placeholder="Тўлов суммаси" id="op-${shortId}">
@@ -1244,7 +1253,7 @@ function onInvoiceProductInput(id) {
     row.dataset.productId = exact.id;
     priceInput.value = exact.price;
     priceInput.readOnly = true;
-    statusEl.textContent = `✅ ${exact.name} (${fmt(exact.price)} сўм)`;
+    statusEl.textContent = `✅ ${exact.name} (${fmt(exact.price)})`;
     statusEl.style.color = 'var(--green)';
   } else {
     row.dataset.productId = '';
@@ -1315,7 +1324,7 @@ async function scanForInvoice() {
 function recalcInvoiceTotal() {
   const items = getInvoiceRows();
   const total = items.reduce((s, i) => s + i.sum, 0);
-  document.getElementById('invoiceTotal').textContent = fmt(total) + ' сўм';
+  document.getElementById('invoiceTotal').textContent = fmt(total);
   // Standart holatda "hozir to'langan summa" = jami (to'liq to'langan deb faraz qilamiz)
   const paidInput = document.getElementById('inv-paidnow');
   if (paidInput && !paidInput.dataset.touched) {
@@ -1412,7 +1421,7 @@ async function submitInvoice() {
         <div class="print-status-name">${customerName}</div>
         <div class="print-status-sub"><span class="spinner"></span> Чоп этилмоқда...</div>
       </div>
-      <div style="font-weight:700;">${fmt(total)} сўм</div>
+      <div style="font-weight:700;">${fmt(total)}</div>
     </div>
     <div class="receipt-wrap" id="receiptWrap"></div>
   `;
@@ -1447,7 +1456,7 @@ async function submitInvoice() {
         <div class="receipt-dashed"></div>
         ${itemsHtml}
         <div class="receipt-dashed"></div>
-        <div class="receipt-total-row"><span>ЖАМИ</span><span>${fmt(total)} сўм</span></div>
+        <div class="receipt-total-row"><span>ЖАМИ</span><span>${fmt(total)}</span></div>
         ${remaining > 0 ? `
           <div class="receipt-line"><span>Тўланди</span><span>${fmt(paidNow)}</span></div>
           <div class="receipt-line" style="color:var(--red);font-weight:700;"><span>Қарз қолдиғи</span><span>${fmt(remaining)}</span></div>
@@ -1472,7 +1481,7 @@ async function submitInvoice() {
 
     // Ulashish tugmalari — Telegram avtomatik yuborilgan bo'lsa xabar beramiz,
     // aks holda WhatsApp / nusxa olish variantlarini taklif qilamiz
-    const shareText = `ZarGo — Наклад\n\n${items.map(i => `${i.name} × ${i.qty} = ${fmt(i.sum)}`).join('\n')}\n\nЖАМИ: ${fmt(total)} сўм\nМижоз: ${customerName}\nСана: ${dateStr}`;
+    const shareText = `ZarGo — Наклад\n\n${items.map(i => `${i.name} × ${i.qty} = ${fmt(i.sum)}`).join('\n')}\n\nЖАМИ: ${fmt(total)}\nМижоз: ${customerName}\nСана: ${dateStr}`;
     const waLink = customerPhone
       ? `https://wa.me/${customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(shareText)}`
       : null;
@@ -1494,7 +1503,7 @@ async function submitInvoice() {
     document.getElementById('inv-customer').value = '';
     document.getElementById('inv-phone').value = '';
     document.getElementById('invoiceItems').innerHTML = '';
-    document.getElementById('invoiceTotal').textContent = '0 сўм';
+    document.getElementById('invoiceTotal').textContent = '0с';
     document.getElementById('inv-paidnow').value = '';
     document.getElementById('inv-paidnow').dataset.touched = '';
     document.getElementById('inv-cash').value = '';
