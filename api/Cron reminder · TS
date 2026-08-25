@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase.js";
 import { sendMessage } from "../lib/telegram.js";
-import { t, Lang } from "../lib/i18n.js";
+import { t, Lang, fmtSomoni } from "../lib/i18n.js";
 
 // Tojikiston (Asia/Dushanbe, UTC+5, DST yo'q) bo'yicha "kecha"ning UTC chegaralarini hisoblaymiz.
 // Cron aynan 02:00 UTC (=07:00 mahalliy) da ishga tushadi, shuning uchun server UTC sanasi
@@ -45,10 +45,10 @@ async function buildDailyReport(): Promise<string> {
   return [
     `📊 <b>Кунлик ҳисобот — ${dateLabel}</b>`,
     ``,
-    `Умумий савдо: ${totalSales.toLocaleString("ru-RU")} сўм`,
+    `Умумий савдо: ${fmtSomoni(totalSales)}`,
     `Заказлар сони: ${orderCount} та`,
-    `Ўртача чек: ${Math.round(avgCheck).toLocaleString("ru-RU")} сўм`,
-    `Соф фойда: ${Math.round(netProfit).toLocaleString("ru-RU")} сўм`,
+    `Ўртача чек: ${fmtSomoni(Math.round(avgCheck))}`,
+    `Соф фойда: ${fmtSomoni(Math.round(netProfit))}`,
   ].join("\n");
 }
 
@@ -85,7 +85,7 @@ export default async function handler(req: any, res: any) {
         const lang = shop.language as Lang;
         await sendMessage(shop.telegram_chat_id, t.debtReminder[lang](remaining));
       }
-      remindedShops.push(`${shop.name} (${shop.owner_name}) — ${remaining.toLocaleString("ru-RU")} сўм`);
+      remindedShops.push(`${shop.name} (${shop.owner_name}) — ${fmtSomoni(remaining)}`);
     }
 
     // Adminga bugungi qarz ro'yxatini yuboramiz
